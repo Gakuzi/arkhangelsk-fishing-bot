@@ -9,7 +9,11 @@ import { api } from './services/api.ts';
 import {
   initTelegramApp,
   getTelegramUser,
-  isInsideTelegram
+  isInsideTelegram,
+  setBackButton,
+  hideBackButton,
+  sendDataToBot,
+  hapticFeedback
 } from './services/telegramWebApp.ts';
 import {
   UserProfile,
@@ -93,38 +97,83 @@ export function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // Synchronize native Telegram BackButton with active tab
+  useEffect(() => {
+    if (activeTab !== 'trips') {
+      setBackButton(() => {
+        hapticFeedback('selection');
+        setActiveTab('trips');
+      }, true);
+    } else {
+      hideBackButton();
+    }
+  }, [activeTab]);
+
   // Handlers
   const handleSaveProfile = async (updates: Partial<UserProfile>) => {
     if (!activeUser) return;
     const updated = await api.updateProfile(activeUser.id, updates);
     setActiveUser(updated);
+    hapticFeedback('success');
     await loadAllData();
   };
 
   const handleJoinTrip = async (tripId: string) => {
     if (!activeUser) return;
+    const trip = trips.find(t => t.id === tripId);
     await api.joinTrip(tripId, activeUser.id);
+    hapticFeedback('success');
+    if (isInsideTelegram() && trip) {
+      sendDataToBot({
+        action: 'join_crew',
+        tripId: trip.id,
+        tripTitle: trip.title,
+        userId: activeUser.id,
+        userName: activeUser.name
+      });
+    }
     await loadAllData();
   };
 
   const handleLeaveTrip = async (tripId: string) => {
     if (!activeUser) return;
     await api.leaveTrip(tripId, activeUser.id);
+    hapticFeedback('medium');
     await loadAllData();
   };
 
   const handleCreateTrip = async (tripData: any) => {
     await api.createTrip(tripData);
+    hapticFeedback('success');
     await loadAllData();
   };
 
   const handleAddHistory = async (entry: any) => {
     await api.addHistory(entry);
+    hapticFeedback('success');
+    if (isInsideTelegram() && entry.catches?.length) {
+      const topCatch = entry.catches[0];
+      sendDataToBot({
+        action: 'add_catch',
+        fish: topCatch.fishType,
+        weight: topCatch.weightKg,
+        spot: entry.locationName
+      });
+    }
     await loadAllData();
   };
 
   const handleAddSpot = async (spot: any) => {
     await api.addSpot(spot);
+    hapticFeedback('success');
+    if (isInsideTelegram() && spot) {
+      sendDataToBot({
+        action: 'add_spot',
+        name: spot.name,
+        lat: spot.lat,
+        lon: spot.lon
+      });
+    }
     await loadAllData();
   };
 

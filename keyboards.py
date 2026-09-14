@@ -73,3 +73,27 @@ def get_trips_keyboard() -> InlineKeyboardMarkup:
             ]
         ]
     )
+
+def get_profile_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="👤 Открыть Личный Кабинет",
+                    web_app=WebAppInfo(url=f"{WEBAPP_URL}?tab=profile")
+                )
+            ]
+        ]
+    )
+
+def get_history_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🐟 Отчеты об уловах и снастях",
+                    web_app=WebAppInfo(url=f"{WEBAPP_URL}?tab=history")
+                )
+            ]
+        ]
+    )

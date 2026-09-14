@@ -7,6 +7,23 @@ export interface TelegramUser {
   photo_url?: string;
 }
 
+export interface ThemeParams {
+  bg_color?: string;
+  text_color?: string;
+  hint_color?: string;
+  link_color?: string;
+  button_color?: string;
+  button_text_color?: string;
+  secondary_bg_color?: string;
+  header_bg_color?: string;
+  bottom_bar_bg_color?: string;
+  accent_text_color?: string;
+  section_bg_color?: string;
+  section_header_text_color?: string;
+  subtitle_text_color?: string;
+  destructive_text_color?: string;
+}
+
 export function getTelegramWebApp() {
   if (typeof window !== 'undefined' && (window as any).Telegram?.WebApp) {
     return (window as any).Telegram.WebApp;
@@ -29,6 +46,11 @@ export function getTelegramUser(): TelegramUser | null {
   return tg?.initDataUnsafe?.user || null;
 }
 
+export function getThemeParams(): ThemeParams {
+  const tg = getTelegramWebApp();
+  return tg?.themeParams || {};
+}
+
 export function initTelegramApp() {
   const tg = getTelegramWebApp();
   if (!tg) return;
@@ -36,7 +58,16 @@ export function initTelegramApp() {
   try {
     tg.ready();
     tg.expand();
-    // Enable closing confirmation to prevent losing form drafts
+
+    // Set header & background color to match dark поморский aesthetic
+    if (tg.setHeaderColor) {
+      tg.setHeaderColor('#020617'); // slate-950
+    }
+    if (tg.setBackgroundColor) {
+      tg.setBackgroundColor('#020617');
+    }
+
+    // Enable closing confirmation to prevent losing drafts
     if (typeof tg.enableClosingConfirmation === 'function') {
       tg.enableClosingConfirmation();
     }
@@ -45,17 +76,164 @@ export function initTelegramApp() {
   }
 }
 
-export function hapticFeedback(type: 'light' | 'medium' | 'heavy' | 'success' | 'warning' | 'error' = 'light') {
+export function hapticFeedback(
+  type: 'light' | 'medium' | 'heavy' | 'success' | 'warning' | 'error' | 'selection' = 'light'
+) {
   const tg = getTelegramWebApp();
   if (!tg?.HapticFeedback) return;
 
   try {
-    if (['success', 'warning', 'error'].includes(type)) {
+    if (type === 'selection') {
+      tg.HapticFeedback.selectionChanged();
+    } else if (['success', 'warning', 'error'].includes(type)) {
       tg.HapticFeedback.notificationOccurred(type);
     } else {
       tg.HapticFeedback.impactOccurred(type);
     }
   } catch {}
+}
+
+/**
+ * Configure native Telegram MainButton (bottom sticky action button)
+ */
+export function setMainButton(options: {
+  text: string;
+  onClick: () => void;
+  isVisible?: boolean;
+  isActive?: boolean;
+  color?: string;
+  textColor?: string;
+}) {
+  const tg = getTelegramWebApp();
+  if (!tg?.MainButton) return;
+
+  try {
+    tg.MainButton.setText(options.text);
+    if (options.color) tg.MainButton.setParams({ color: options.color, text_color: options.textColor || '#ffffff' });
+
+    // Remove previous click handlers to prevent duplicates
+    tg.MainButton.offClick();
+    tg.MainButton.onClick(options.onClick);
+
+    if (options.isActive !== false) {
+      tg.MainButton.enable();
+    } else {
+      tg.MainButton.disable();
+    }
+
+    if (options.isVisible !== false) {
+      tg.MainButton.show();
+    } else {
+      tg.MainButton.hide();
+    }
+  } catch (err) {
+    console.warn('[TelegramWebApp] MainButton error:', err);
+  }
+}
+
+export function hideMainButton() {
+  const tg = getTelegramWebApp();
+  if (tg?.MainButton?.isVisible) {
+    try {
+      tg.MainButton.hide();
+      tg.MainButton.offClick();
+    } catch {}
+  }
+}
+
+/**
+ * Configure native Telegram BackButton (top left navigation)
+ */
+export function setBackButton(onClick: () => void, isVisible = true) {
+  const tg = getTelegramWebApp();
+  if (!tg?.BackButton) return;
+
+  try {
+    tg.BackButton.offClick();
+    tg.BackButton.onClick(onClick);
+    if (isVisible) {
+      tg.BackButton.show();
+    } else {
+      tg.BackButton.hide();
+    }
+  } catch {}
+}
+
+export function hideBackButton() {
+  const tg = getTelegramWebApp();
+  if (tg?.BackButton?.isVisible) {
+    try {
+      tg.BackButton.hide();
+      tg.BackButton.offClick();
+    } catch {}
+  }
+}
+
+/**
+ * Send data directly back to the bot chat using official Telegram.WebApp.sendData
+ */
+export function sendDataToBot(data: any): boolean {
+  const tg = getTelegramWebApp();
+  if (!tg) return false;
+
+  try {
+    const serialized = typeof data === 'string' ? data : JSON.stringify(data);
+    if (typeof tg.sendData === 'function') {
+      tg.sendData(serialized);
+      hapticFeedback('success');
+      return true;
+    }
+  } catch (err) {
+    console.warn('[TelegramWebApp] sendData failed:', err);
+  }
+  return false;
+}
+
+/**
+ * Show native Telegram alert modal
+ */
+export function showAlert(message: string, callback?: () => void) {
+  const tg = getTelegramWebApp();
+  if (tg?.showAlert) {
+    tg.showAlert(message, callback);
+  } else {
+    alert(message);
+    if (callback) callback();
+  }
+}
+
+/**
+ * Show native Telegram confirm dialog
+ */
+export function showConfirm(message: string, callback: (confirmed: boolean) => void) {
+  const tg = getTelegramWebApp();
+  if (tg?.showConfirm) {
+    tg.showConfirm(message, callback);
+  } else {
+    const res = confirm(message);
+    callback(res);
+  }
+}
+
+/**
+ * Open external URL or Telegram link
+ */
+export function openTelegramLink(url: string) {
+  const tg = getTelegramWebApp();
+  if (tg?.openTelegramLink) {
+    tg.openTelegramLink(url);
+  } else {
+    window.open(url, '_blank');
+  }
+}
+
+export function openLink(url: string) {
+  const tg = getTelegramWebApp();
+  if (tg?.openLink) {
+    tg.openLink(url);
+  } else {
+    window.open(url, '_blank');
+  }
 }
 
 export function closeTelegramApp() {
