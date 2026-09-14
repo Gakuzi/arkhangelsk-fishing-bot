@@ -65,7 +65,7 @@ export function App() {
       setLogs(logsData);
       if (statusData) setBotStatus(statusData);
 
-      // Auto-detect Telegram User
+      // Auto-detect Telegram User or create fallback
       const tgUser = getTelegramUser();
       if (usersData.length > 0) {
         setActiveUser(prev => {
@@ -73,6 +73,7 @@ export function App() {
             const matched = usersData.find(
               u =>
                 (tgUser.username && u.telegramUsername.toLowerCase() === tgUser.username.toLowerCase()) ||
+                u.id === `tg-${tgUser.id}` ||
                 u.name.toLowerCase().includes(tgUser.first_name.toLowerCase())
             );
             if (matched) return matched;
@@ -82,6 +83,24 @@ export function App() {
             if (found) return found;
           }
           return usersData[0];
+        });
+      } else {
+        // If users table is empty in DB, initialize with current user info
+        const defaultUser: UserProfile = {
+          id: tgUser ? `tg-${tgUser.id}` : `u-${Date.now()}`,
+          name: tgUser ? `${tgUser.first_name} ${tgUser.last_name || ''}`.trim() : 'Рыбак',
+          telegramUsername: tgUser?.username || '',
+          experienceLevel: 'Любитель',
+          fishingStyles: ['Зимняя со льда', 'Мормышка'],
+          boatType: 'Без техники',
+          homeDistrict: 'Архангельск',
+          createdAt: new Date().toISOString().split('T')[0]
+        };
+        api.updateProfile(defaultUser.id, defaultUser).then(saved => {
+          setActiveUser(saved);
+          setUsers([saved]);
+        }).catch(() => {
+          setActiveUser(defaultUser);
         });
       }
     } catch (err) {

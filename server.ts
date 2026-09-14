@@ -7,7 +7,8 @@ import { telegramBot } from './server/telegramBot.ts';
 
 async function startServer() {
   const app = express();
-  const PORT = config.port;
+  const PORT = 3000;
+  const HOST = '0.0.0.0';
 
   app.use(express.json());
 
@@ -39,10 +40,10 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, config.host, () => {
+  app.listen(PORT, HOST, () => {
     console.log(`=======================================================`);
     console.log(`⚓ Arkhangelsk Fishing Bot Server started`);
-    console.log(`🌐 Local & WebApp URL: http://${config.host}:${PORT}`);
+    console.log(`🌐 Local & WebApp URL: http://${HOST}:${PORT}`);
     console.log(`🤖 Telegram Bot Polling: ${telegramBot.getStatus().isPolling ? 'Active' : 'Standby'}`);
     console.log(`=======================================================`);
   });

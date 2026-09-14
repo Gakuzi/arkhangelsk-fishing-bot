@@ -13,9 +13,11 @@ import {
   Sparkles,
   Send,
   X,
-  Fish
+  Fish,
+  Share2
 } from 'lucide-react';
 import { PlannedTrip, UserProfile } from '../../types/index.ts';
+import { openTelegramLink } from '../../services/telegramWebApp.ts';
 
 interface PlannedTripsViewProps {
   trips: PlannedTrip[];
@@ -54,6 +56,11 @@ export const PlannedTripsView: React.FC<PlannedTripsViewProps> = ({
     }
     return true;
   });
+
+  const handleShareTrip = (trip: PlannedTrip) => {
+    const text = encodeURIComponent(`🎣 Погнали на рыбалку: "${trip.title}" (${trip.destination})\nДата: ${trip.date} в ${trip.meetTime}\nСвободно мест: ${Math.max(0, trip.maxCrew - trip.participants.length)} из ${trip.maxCrew}`);
+    openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent('https://t.me/fishing_pomor_bot')}&text=${text}`);
+  };
 
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -288,8 +295,18 @@ export const PlannedTripsView: React.FC<PlannedTripsViewProps> = ({
 
                 {/* Bottom Action Buttons */}
                 <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-3">
-                  <div className="text-[11px] text-slate-500">
-                    Капитан: <strong className="text-slate-300">{trip.organizerName}</strong>
+                  <div className="flex items-center gap-2">
+                    <div className="text-[11px] text-slate-500">
+                      Капитан: <strong className="text-slate-300">{trip.organizerName}</strong>
+                    </div>
+                    <button
+                      onClick={() => handleShareTrip(trip)}
+                      title="Поделиться в Telegram (группы / ЛС)"
+                      className="p-1.5 rounded-lg bg-slate-800/80 hover:bg-sky-600/30 text-slate-400 hover:text-sky-300 border border-slate-700/60 transition flex items-center gap-1 text-[11px]"
+                    >
+                      <Share2 className="w-3.5 h-3.5 text-sky-400" />
+                      <span className="hidden sm:inline">Поделиться</span>
+                    </button>
                   </div>
 
                   {isUserJoined ? (

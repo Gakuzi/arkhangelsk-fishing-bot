@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { storage } from '../storage.ts';
+import { sqliteStorage } from '../sqliteStorage.ts';
 import { telegramBot } from '../telegramBot.ts';
 import { config } from '../config.ts';
 
@@ -19,93 +19,173 @@ apiRouter.get('/config', (req: Request, res: Response) => {
 });
 
 // Users & Profiles
-apiRouter.get('/users', (req: Request, res: Response) => {
-  res.json(storage.getUsers());
+apiRouter.get('/users', async (req: Request, res: Response) => {
+  try {
+    const users = await sqliteStorage.getUsers();
+    res.json(users);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-apiRouter.get('/users/:id', (req: Request, res: Response) => {
-  const user = storage.getUserById(req.params.id);
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  res.json(user);
+apiRouter.get('/users/:id', async (req: Request, res: Response) => {
+  try {
+    const user = await sqliteStorage.getUserById(req.params.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(user);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-apiRouter.put('/users/:id/profile', (req: Request, res: Response) => {
-  const updated = storage.updateProfile(req.params.id, req.body);
-  res.json(updated);
+apiRouter.put('/users/:id/profile', async (req: Request, res: Response) => {
+  try {
+    const updated = await sqliteStorage.updateProfile(req.params.id, req.body);
+    res.json(updated);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Planned Trips
-apiRouter.get('/trips', (req: Request, res: Response) => {
-  res.json(storage.getTrips());
-});
-
-apiRouter.post('/trips', (req: Request, res: Response) => {
-  const { organizerId, ...tripData } = req.body;
-  const organizer = storage.getUserById(organizerId) || storage.getUsers()[0];
-  const newTrip = storage.createTrip(tripData, organizer);
-  res.status(201).json(newTrip);
-});
-
-apiRouter.post('/trips/:id/join', (req: Request, res: Response) => {
-  const { userId } = req.body;
-  const user = storage.getUserById(userId) || storage.getUsers()[0];
-  const result = storage.joinTrip(req.params.id, user);
-  if (!result.success) {
-    return res.status(400).json(result);
+apiRouter.get('/trips', async (req: Request, res: Response) => {
+  try {
+    const trips = await sqliteStorage.getTrips();
+    res.json(trips);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
-  res.json(result);
 });
 
-apiRouter.post('/trips/:id/leave', (req: Request, res: Response) => {
-  const { userId } = req.body;
-  const result = storage.leaveTrip(req.params.id, userId);
-  if (!result.success) {
-    return res.status(400).json(result);
+apiRouter.post('/trips', async (req: Request, res: Response) => {
+  try {
+    const { organizerId, ...tripData } = req.body;
+    const users = await sqliteStorage.getUsers();
+    const organizer = (organizerId ? await sqliteStorage.getUserById(organizerId) : null) || users[0] || {
+      id: organizerId || `user-${Date.now()}`,
+      name: tripData.organizerName || 'Организатор',
+      telegramUsername: '',
+      experienceLevel: 'Любитель',
+      fishingStyles: ['Зимняя со льда'],
+      boatType: 'Без техники',
+      homeDistrict: 'Архангельск',
+      createdAt: new Date().toISOString()
+    };
+    const newTrip = await sqliteStorage.createTrip(tripData, organizer);
+    res.status(201).json(newTrip);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
-  res.json(result);
+});
+
+apiRouter.post('/trips/:id/join', async (req: Request, res: Response) => {
+  try {
+    const { userId, userName, telegramUsername } = req.body;
+    let user = userId ? await sqliteStorage.getUserById(userId) : undefined;
+    if (!user) {
+      user = {
+        id: userId || `u-${Date.now()}`,
+        name: userName || 'Рыбак',
+        telegramUsername: telegramUsername || '',
+        experienceLevel: 'Любитель',
+        fishingStyles: ['Зимняя со льда'],
+        boatType: 'Без техники',
+        homeDistrict: 'Архангельск',
+        createdAt: new Date().toISOString()
+      };
+      await sqliteStorage.updateProfile(user.id, user);
+    }
+    const result = await sqliteStorage.joinTrip(req.params.id, user);
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+apiRouter.post('/trips/:id/leave', async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.body;
+    const result = await sqliteStorage.leaveTrip(req.params.id, userId);
+    if (!result.success) {
+      return res.status(400).json(result);
+    }
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Fishing History & Catches
-apiRouter.get('/history', (req: Request, res: Response) => {
-  res.json(storage.getHistory());
+apiRouter.get('/history', async (req: Request, res: Response) => {
+  try {
+    const history = await sqliteStorage.getHistory();
+    res.json(history);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-apiRouter.post('/history', (req: Request, res: Response) => {
-  const entry = req.body;
-  if (!entry.location || !entry.catches) {
-    return res.status(400).json({ error: 'Location and catches are required' });
+apiRouter.post('/history', async (req: Request, res: Response) => {
+  try {
+    const entry = req.body;
+    if (!entry.location || !entry.catches) {
+      return res.status(400).json({ error: 'Location and catches are required' });
+    }
+    const newEntry = await sqliteStorage.addHistory(entry);
+    res.status(201).json(newEntry);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
-  const newEntry = storage.addHistory(entry);
-  res.status(201).json(newEntry);
 });
 
 // Fishing Spots
-apiRouter.get('/spots', (req: Request, res: Response) => {
-  res.json(storage.getSpots());
+apiRouter.get('/spots', async (req: Request, res: Response) => {
+  try {
+    const spots = await sqliteStorage.getSpots();
+    res.json(spots);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-apiRouter.post('/spots', (req: Request, res: Response) => {
-  const spot = req.body;
-  if (spot.lat === undefined || spot.lon === undefined) {
-    return res.status(400).json({ error: 'Coordinates are required' });
+apiRouter.post('/spots', async (req: Request, res: Response) => {
+  try {
+    const spot = req.body;
+    if (spot.lat === undefined || spot.lon === undefined) {
+      return res.status(400).json({ error: 'Coordinates are required' });
+    }
+    const newSpot = await sqliteStorage.addSpot(spot);
+    res.status(201).json(newSpot);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
-  const newSpot = storage.addSpot(spot);
-  res.status(201).json(newSpot);
 });
 
 // Logs & Bot console
-apiRouter.get('/logs', (req: Request, res: Response) => {
-  res.json(storage.getLogs());
+apiRouter.get('/logs', async (req: Request, res: Response) => {
+  try {
+    const logs = await sqliteStorage.getLogs();
+    res.json(logs);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
-apiRouter.post('/logs', (req: Request, res: Response) => {
-  const { role, text, type } = req.body;
-  const log = storage.addLog(role || 'Пользователь', text, type || 'text');
-  res.status(201).json(log);
+apiRouter.post('/logs', async (req: Request, res: Response) => {
+  try {
+    const { role, text, type } = req.body;
+    const log = await sqliteStorage.addLog(role || 'Пользователь', text, type || 'text');
+    res.status(201).json(log);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 apiRouter.get('/queue', (req: Request, res: Response) => {
-  res.json(storage.getQueue());
+  res.json([]);
 });
 
 apiRouter.get('/bot/status', (req: Request, res: Response) => {

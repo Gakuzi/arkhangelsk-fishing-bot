@@ -5,6 +5,7 @@ from aiogram.types import MenuButtonWebApp, WebAppInfo, BotCommand
 from config import TELEGRAM_BOT_TOKEN, WEBAPP_URL
 import handlers_group
 import handlers_private
+import handlers_inline
 import database
 
 logging.basicConfig(level=logging.INFO)
@@ -49,14 +50,15 @@ async def main():
     bot = Bot(token=TELEGRAM_BOT_TOKEN)
     dp = Dispatcher()
 
-    # Регистрируем роутеры
+    # Регистрируем роутеры: приватный, групповой и инлайн
+    dp.include_router(handlers_inline.router)
     dp.include_router(handlers_private.router)
     dp.include_router(handlers_group.router)
 
     # Настраиваем визуальный интерфейс (Menu Button WebApp)
     await setup_bot_ui(bot)
 
-    logger.info("Запуск Telegram-бота Arkhangelsk Fishing Bot (Long-polling)...")
+    logger.info("Запуск Telegram-бота Arkhangelsk Fishing Bot (Long-polling + Inline Mode)...")
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
