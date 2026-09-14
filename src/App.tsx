@@ -1,111 +1,204 @@
 import React, { useState, useEffect } from 'react';
-import { Header } from './components/Header.tsx';
-import { TelegramSimulator } from './components/TelegramSimulator.tsx';
-import { FishingSpotsMap } from './components/FishingSpotsMap.tsx';
-import { CrewRoster } from './components/CrewRoster.tsx';
-import { JournalLogs } from './components/JournalLogs.tsx';
-import { BotConfig, LogEntry, FishingSpot, CrewMember, SparkCommand } from './types.ts';
-import { Terminal, ShieldCheck, MapPin, Users, Activity } from 'lucide-react';
+import { Navbar, ActiveTab } from './components/layout/Navbar.tsx';
+import { PlannedTripsView } from './components/trips/PlannedTripsView.tsx';
+import { FishingHistoryView } from './components/history/FishingHistoryView.tsx';
+import { FishingSpotsView } from './components/spots/FishingSpotsView.tsx';
+import { UserProfileView } from './components/profile/UserProfileView.tsx';
+import { TelegramBotConsole } from './components/bot/TelegramBotConsole.tsx';
+import { api } from './services/api.ts';
+import {
+  initTelegramApp,
+  getTelegramUser,
+  isInsideTelegram
+} from './services/telegramWebApp.ts';
+import {
+  UserProfile,
+  PlannedTrip,
+  TripHistory,
+  FishingSpot,
+  LogEntry,
+  BotStatus
+} from './types/index.ts';
 
 export function App() {
-  const [config, setConfig] = useState<BotConfig | null>(null);
-  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [activeTab, setActiveTab] = useState<ActiveTab>('trips');
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [activeUser, setActiveUser] = useState<UserProfile | null>(null);
+  const [trips, setTrips] = useState<PlannedTrip[]>([]);
+  const [history, setHistory] = useState<TripHistory[]>([]);
   const [spots, setSpots] = useState<FishingSpot[]>([]);
-  const [crew, setCrew] = useState<CrewMember[]>([]);
-  const [queue, setQueue] = useState<SparkCommand[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [botStatus, setBotStatus] = useState<BotStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchData = async () => {
-    try {
-      const [cfgRes, logsRes, spotsRes, crewRes, qRes] = await Promise.all([
-        fetch('/api/config').catch(() => null),
-        fetch('/api/logs').catch(() => null),
-        fetch('/api/spots').catch(() => null),
-        fetch('/api/crew').catch(() => null),
-        fetch('/api/queue').catch(() => null)
-      ]);
+  // Initialize Telegram WebApp and read deep link tab
+  useEffect(() => {
+    initTelegramApp();
 
-      if (cfgRes?.ok) setConfig(await cfgRes.json());
-      if (logsRes?.ok) setLogs(await logsRes.json());
-      if (spotsRes?.ok) setSpots(await spotsRes.json());
-      if (crewRes?.ok) setCrew(await crewRes.json());
-      if (qRes?.ok) setQueue(await qRes.json());
+    const urlParams = new URLSearchParams(window.location.search);
+    const tabParam = urlParams.get('tab') as ActiveTab;
+    if (tabParam && ['trips', 'history', 'spots', 'profile', 'bot'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, []);
+
+  const loadAllData = async () => {
+    try {
+      const [usersData, tripsData, histData, spotsData, logsData, statusData] =
+        await Promise.all([
+          api.getUsers().catch(() => []),
+          api.getTrips().catch(() => []),
+          api.getHistory().catch(() => []),
+          api.getSpots().catch(() => []),
+          api.getLogs().catch(() => []),
+          api.getBotStatus().catch(() => null)
+        ]);
+
+      setUsers(usersData);
+      setTrips(tripsData);
+      setHistory(histData);
+      setSpots(spotsData);
+      setLogs(logsData);
+      if (statusData) setBotStatus(statusData);
+
+      // Auto-detect Telegram User
+      const tgUser = getTelegramUser();
+      if (usersData.length > 0) {
+        setActiveUser(prev => {
+          if (tgUser) {
+            const matched = usersData.find(
+              u =>
+                (tgUser.username && u.telegramUsername.toLowerCase() === tgUser.username.toLowerCase()) ||
+                u.name.toLowerCase().includes(tgUser.first_name.toLowerCase())
+            );
+            if (matched) return matched;
+          }
+          if (prev) {
+            const found = usersData.find(u => u.id === prev.id);
+            if (found) return found;
+          }
+          return usersData[0];
+        });
+      }
     } catch (err) {
-      console.error('Error fetching data:', err);
+      console.error('Error loading data:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
-    const interval = setInterval(fetchData, 8000);
+    loadAllData();
+    const interval = setInterval(loadAllData, 10000);
     return () => clearInterval(interval);
   }, []);
 
+  // Handlers
+  const handleSaveProfile = async (updates: Partial<UserProfile>) => {
+    if (!activeUser) return;
+    const updated = await api.updateProfile(activeUser.id, updates);
+    setActiveUser(updated);
+    await loadAllData();
+  };
+
+  const handleJoinTrip = async (tripId: string) => {
+    if (!activeUser) return;
+    await api.joinTrip(tripId, activeUser.id);
+    await loadAllData();
+  };
+
+  const handleLeaveTrip = async (tripId: string) => {
+    if (!activeUser) return;
+    await api.leaveTrip(tripId, activeUser.id);
+    await loadAllData();
+  };
+
+  const handleCreateTrip = async (tripData: any) => {
+    await api.createTrip(tripData);
+    await loadAllData();
+  };
+
+  const handleAddHistory = async (entry: any) => {
+    await api.addHistory(entry);
+    await loadAllData();
+  };
+
+  const handleAddSpot = async (spot: any) => {
+    await api.addSpot(spot);
+    await loadAllData();
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-sky-500 selection:text-white">
-      <Header
-        config={config}
-        logsCount={logs.length}
-        spotsCount={spots.length}
-        crewCount={crew.filter(c => c.vote === 'yes').length}
+      <Navbar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        users={users}
+        activeUser={activeUser}
+        onSelectUser={setActiveUser}
+        botStatus={botStatus}
+        tripsCount={trips.filter(t => t.status === 'Набор открыт').length}
       />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-        {/* Status banner */}
-        <div className="rounded-xl bg-gradient-to-r from-sky-950/60 via-slate-900 to-indigo-950/50 border border-sky-800/30 p-4 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs sm:text-sm">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-sky-600/20 border border-sky-500/40 flex items-center justify-center text-sky-400">
-              <Activity className="w-5 h-5 animate-pulse" />
-            </div>
-            <div>
-              <div className="font-semibold text-slate-100">
-                Миграция Python бота в Node.js / React успешно выполнена
-              </div>
-              <div className="text-slate-400 text-xs mt-0.5">
-                Все оригинальные сценарии (журнал Google Docs, точки лова, реакция «👀», Spark Queue, экипаж) работают через встроенный API.
-              </div>
-            </div>
+      {/* Main Content with bottom padding for mobile Telegram navigation */}
+      <main className="flex-1 max-w-7xl w-full mx-auto p-3.5 sm:p-6 lg:p-8 pb-24 md:pb-8">
+        {loading ? (
+          <div className="flex items-center justify-center h-64 text-sm text-slate-400">
+            Загрузка приложения рыбака...
           </div>
-          <div className="flex items-center gap-2 self-start md:self-auto shrink-0 font-mono text-xs">
-            <span className="px-2.5 py-1 rounded bg-slate-800 border border-slate-700 text-slate-300">
-              Порт: 3000
-            </span>
-            <span className="px-2.5 py-1 rounded bg-emerald-950/60 border border-emerald-800 text-emerald-300">
-              Эмуляция + Webhook
-            </span>
-          </div>
-        </div>
+        ) : (
+          <>
+            {activeTab === 'trips' && (
+              <PlannedTripsView
+                trips={trips}
+                activeUser={activeUser}
+                onJoinTrip={handleJoinTrip}
+                onLeaveTrip={handleLeaveTrip}
+                onCreateTrip={handleCreateTrip}
+              />
+            )}
 
-        {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-          {/* Left Column: Telegram Simulator (takes 6 cols on large screens) */}
-          <div className="lg:col-span-6 h-[640px] flex flex-col">
-            <TelegramSimulator onRefreshData={fetchData} />
-          </div>
+            {activeTab === 'history' && (
+              <FishingHistoryView
+                history={history}
+                activeUser={activeUser}
+                onAddHistory={handleAddHistory}
+              />
+            )}
 
-          {/* Right Column: Dashboard Tabs / Modules (takes 6 cols) */}
-          <div className="lg:col-span-6 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="h-full min-h-[340px]">
-                <FishingSpotsMap spots={spots} onSpotAdded={fetchData} />
-              </div>
-              <div className="h-full min-h-[340px]">
-                <CrewRoster crew={crew} onVoteRecorded={fetchData} />
-              </div>
-            </div>
+            {activeTab === 'spots' && (
+              <FishingSpotsView
+                spots={spots}
+                activeUser={activeUser}
+                onAddSpot={handleAddSpot}
+              />
+            )}
 
-            <div className="min-h-[280px]">
-              <JournalLogs logs={logs} queue={queue} onRefresh={fetchData} />
-            </div>
-          </div>
-        </div>
+            {activeTab === 'profile' && activeUser && (
+              <UserProfileView
+                user={activeUser}
+                onSaveProfile={handleSaveProfile}
+                history={history}
+                trips={trips}
+              />
+            )}
+
+            {activeTab === 'bot' && (
+              <TelegramBotConsole
+                botStatus={botStatus}
+                logs={logs}
+                activeUser={activeUser}
+                onSimulateMessage={api.simulateBotMessage}
+                onSendRealMessage={api.sendTelegramMessage}
+                onRefreshData={loadAllData}
+              />
+            )}
+          </>
+        )}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-900 bg-slate-950 py-4 text-center text-xs text-slate-500">
-        Архангельск • Рыбалка на Северной Двине и Белом Море • Telegram Bot Spark Migration
+      <footer className="hidden md:block border-t border-slate-900 bg-slate-950 py-4 px-4 text-center text-xs text-slate-500">
+        Архангельск • Рыбалка на Северной Двине и Белом Море • Telegram Bot & Mini App
       </footer>
     </div>
   );
