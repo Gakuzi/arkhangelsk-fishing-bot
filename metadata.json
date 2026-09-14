@@ -1,0 +1,6 @@
+{
+  "name": "Arkhangelsk Fishing Bot",
+  "description": "Telegram bot and coordination dashboard for Arkhangelsk fishing crews, spot logging, and expedition voting.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
