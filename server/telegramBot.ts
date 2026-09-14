@@ -19,7 +19,11 @@ export class TelegramBotService {
       if (me && me.ok) {
         this.botInfo = me.result;
         console.log(`[TelegramBot] Connected as @${this.botInfo?.username} (${this.botInfo?.first_name})`);
-        this.startLongPolling();
+        if (config.enablePolling) {
+          this.startLongPolling();
+        } else {
+          console.log('[TelegramBot] Long polling disabled in Node server (handled by Python bot)');
+        }
       } else {
         console.warn('[TelegramBot] Failed to verify token with Telegram getMe:', me?.description);
       }
