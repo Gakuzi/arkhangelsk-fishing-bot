@@ -26,7 +26,8 @@ class SQLiteStorage {
           resolve();
           return;
         }
-        this.db.prepare(sql).run(...params);
+        const safeParams = params.map(v => v === undefined ? null : v);
+        this.db.prepare(sql).run(...safeParams);
         resolve();
       } catch (err) {
         reject(err);
@@ -41,7 +42,8 @@ class SQLiteStorage {
           resolve([]);
           return;
         }
-        const rows = this.db.prepare(sql).all(...params);
+        const safeParams = params.map(v => v === undefined ? null : v);
+        const rows = this.db.prepare(sql).all(...safeParams);
         resolve(rows as T[]);
       } catch (err) {
         reject(err);
@@ -56,7 +58,8 @@ class SQLiteStorage {
           resolve(undefined);
           return;
         }
-        const row = this.db.prepare(sql).get(...params);
+        const safeParams = params.map(v => v === undefined ? null : v);
+        const row = this.db.prepare(sql).get(...safeParams);
         resolve(row as T);
       } catch (err) {
         reject(err);
@@ -388,7 +391,7 @@ class SQLiteStorage {
         trip.notes || '',
         JSON.stringify(participants),
         timeStr
-      ]
+      ].map(v => v === undefined ? null : v)
     );
 
     const newTrip: PlannedTrip = {

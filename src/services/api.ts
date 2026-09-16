@@ -32,6 +32,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates)
     });
+    if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
 
@@ -47,6 +48,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(trip)
     });
+    if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
 
@@ -56,6 +58,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId })
     });
+    if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
 
@@ -65,6 +68,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId })
     });
+    if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
 
@@ -80,6 +84,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(entry)
     });
+    if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
 
@@ -95,6 +100,7 @@ export const api = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(spot)
     });
+    if (!res.ok) throw new Error(await res.text());
     return res.json();
   },
 

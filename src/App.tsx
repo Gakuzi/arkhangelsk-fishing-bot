@@ -4,7 +4,6 @@ import { PlannedTripsView } from './components/trips/PlannedTripsView.tsx';
 import { FishingHistoryView } from './components/history/FishingHistoryView.tsx';
 import { FishingSpotsView } from './components/spots/FishingSpotsView.tsx';
 import { UserProfileView } from './components/profile/UserProfileView.tsx';
-import { TelegramBotConsole } from './components/bot/TelegramBotConsole.tsx';
 import { api } from './services/api.ts';
 import {
   initTelegramApp,
@@ -41,7 +40,7 @@ export function App() {
 
     const urlParams = new URLSearchParams(window.location.search);
     const tabParam = urlParams.get('tab') as ActiveTab;
-    if (tabParam && ['trips', 'history', 'spots', 'profile', 'bot'].includes(tabParam)) {
+    if (tabParam && ['trips', 'history', 'spots', 'profile'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, []);
@@ -248,17 +247,6 @@ export function App() {
                 onSaveProfile={handleSaveProfile}
                 history={history}
                 trips={trips}
-              />
-            )}
-
-            {activeTab === 'bot' && (
-              <TelegramBotConsole
-                botStatus={botStatus}
-                logs={logs}
-                activeUser={activeUser}
-                onSimulateMessage={api.simulateBotMessage}
-                onSendRealMessage={api.sendTelegramMessage}
-                onRefreshData={loadAllData}
               />
             )}
           </>

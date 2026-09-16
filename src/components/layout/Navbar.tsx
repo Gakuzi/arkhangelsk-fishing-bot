@@ -14,7 +14,7 @@ import {
 import { UserProfile, BotStatus } from '../../types/index.ts';
 import { hapticFeedback, isInsideTelegram, getTelegramPlatform } from '../../services/telegramWebApp.ts';
 
-export type ActiveTab = 'trips' | 'history' | 'spots' | 'profile' | 'bot';
+export type ActiveTab = 'trips' | 'history' | 'spots' | 'profile';
 
 interface NavbarProps {
   activeTab: ActiveTab;
@@ -196,25 +196,13 @@ export const Navbar: React.FC<NavbarProps> = ({
               <User className="w-4 h-4" />
               <span>Личный кабинет</span>
             </button>
-
-            <button
-              onClick={() => handleTabClick('bot')}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl font-medium transition ${
-                activeTab === 'bot'
-                  ? 'bg-sky-600 text-white shadow-md shadow-sky-950'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-              }`}
-            >
-              <Bot className="w-4 h-4" />
-              <span>Телеграм бот</span>
-            </button>
           </nav>
         </div>
       </header>
 
       {/* Mobile Bottom Navigation Bar (Optimized for Telegram WebApp Mobile) */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur border-t border-slate-800 pb-[env(safe-area-inset-bottom)] px-2 pt-1 shadow-2xl">
-        <div className="grid grid-cols-5 gap-1">
+        <div className="grid grid-cols-4 gap-1">
           <button
             onClick={() => handleTabClick('trips')}
             className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl transition min-h-[48px] ${
@@ -268,18 +256,6 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             <User className="w-5 h-5" />
             <span className="text-[10px] mt-1 leading-none">Кабинет</span>
-          </button>
-
-          <button
-            onClick={() => handleTabClick('bot')}
-            className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl transition min-h-[48px] ${
-              activeTab === 'bot'
-                ? 'text-sky-400 font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Bot className="w-5 h-5" />
-            <span className="text-[10px] mt-1 leading-none">Бот</span>
           </button>
         </div>
       </div>
