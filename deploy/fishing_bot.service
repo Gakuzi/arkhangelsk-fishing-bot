@@ -1,0 +1,15 @@
+[Unit]
+Description=Fishing Bot and WebApp Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/fishing-bot
+ExecStart=/usr/bin/npm run start
+Restart=on-failure
+Environment=NODE_ENV=production
+Environment=PORT=3005
+
+[Install]
+WantedBy=multi-user.target

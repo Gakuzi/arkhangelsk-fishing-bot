@@ -7,7 +7,7 @@ import { telegramBot } from './server/telegramBot.ts';
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = process.env.DISABLE_HMR === 'true' ? 3000 : config.port;
   const HOST = '0.0.0.0';
 
   app.use(express.json());

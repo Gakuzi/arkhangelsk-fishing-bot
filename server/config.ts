@@ -1,7 +1,7 @@
 import path from 'path';
 
 export const config = {
-  port: Number(process.env.PORT) || 3000,
+  port: Number(process.env.PORT) || 3005,
   host: process.env.HOST || '0.0.0.0',
   telegramToken: process.env.TELEGRAM_BOT_TOKEN || '8666462902:AAFhIMmwQtk0KmN_iM60PAEfsWBCvS0OYhw',
   telegramChatId: process.env.TELEGRAM_CHAT_ID || '-1004386693265',
