@@ -47,6 +47,54 @@ apiRouter.put('/users/:id/profile', async (req: Request, res: Response) => {
   }
 });
 
+// User Gear (Снасти)
+apiRouter.get('/gear', async (req: Request, res: Response) => {
+  try {
+    const userId = (req.query.userId as string) || 'fisherman-1';
+    const gear = await sqliteStorage.getGear(userId);
+    res.json(gear);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+apiRouter.post('/gear', async (req: Request, res: Response) => {
+  try {
+    const { userId, name, category, quantity, notes, isReady } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name is required' });
+    const newGear = await sqliteStorage.addGear({
+      userId: userId || 'fisherman-1',
+      name,
+      category: category || 'Удилища и катушки',
+      quantity: quantity ? Number(quantity) : 1,
+      notes: notes || '',
+      isReady: isReady !== undefined ? Boolean(isReady) : true
+    });
+    res.status(201).json(newGear);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+apiRouter.put('/gear/:id', async (req: Request, res: Response) => {
+  try {
+    const updated = await sqliteStorage.updateGear(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ error: 'Gear not found' });
+    res.json(updated);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+apiRouter.delete('/gear/:id', async (req: Request, res: Response) => {
+  try {
+    await sqliteStorage.deleteGear(req.params.id);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Planned Trips
 apiRouter.get('/trips', async (req: Request, res: Response) => {
   try {
@@ -211,4 +259,23 @@ apiRouter.post('/bot/send', async (req: Request, res: Response) => {
 apiRouter.post('/telegram/webhook', async (req: Request, res: Response) => {
   await telegramBot.handleUpdate(req.body);
   res.json({ ok: true });
+});
+
+// Auto-deployment Webhook (for GitHub / CI/CD / local deploy triggers)
+apiRouter.post('/deploy/webhook', async (req: Request, res: Response) => {
+  const { exec } = await import('child_process');
+  console.log('[Deploy] Webhook triggered. Initiating auto-update & rebuild...');
+  
+  res.json({ 
+    status: 'received', 
+    message: 'Deploy task started. Running git pull, npm build and PM2 restart...' 
+  });
+
+  exec('./deploy.sh', (err, stdout, stderr) => {
+    if (err) {
+      console.error('[Deploy] Error during deployment script:', err, stderr);
+    } else {
+      console.log('[Deploy] Deployment successful:', stdout);
+    }
+  });
 });

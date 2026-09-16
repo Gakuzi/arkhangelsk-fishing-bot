@@ -2,7 +2,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'path';
 import fs from 'fs';
-import { UserProfile, FishingSpot, PlannedTrip, TripHistory, LogEntry, SparkCommand } from './storage.ts';
+import { UserProfile, FishingSpot, PlannedTrip, TripHistory, LogEntry, SparkCommand, FishingGear } from './storage.ts';
 
 const DB_FILE = path.join(process.cwd(), 'fishing_bot.db');
 
@@ -81,6 +81,42 @@ class SQLiteStorage {
         bio TEXT,
         fishing_styles TEXT,
         avatar_url TEXT,
+        transport_name TEXT,
+        total_seats INTEGER,
+        available_seats INTEGER,
+        fuel_type TEXT,
+        fuel_price REAL,
+        fuel_consumption REAL,
+        tank_capacity REAL,
+        created_at TEXT
+      )
+    `);
+
+    // Dynamic columns migration for existing users table
+    const tryAddCol = async (table: string, col: string, type: string) => {
+      try {
+        await this.run(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`);
+      } catch {}
+    };
+
+    await tryAddCol('users', 'transport_name', 'TEXT');
+    await tryAddCol('users', 'total_seats', 'INTEGER');
+    await tryAddCol('users', 'available_seats', 'INTEGER');
+    await tryAddCol('users', 'fuel_type', 'TEXT');
+    await tryAddCol('users', 'fuel_price', 'REAL');
+    await tryAddCol('users', 'fuel_consumption', 'REAL');
+    await tryAddCol('users', 'tank_capacity', 'REAL');
+
+    // Gear (Personal fishing tackle)
+    await this.run(`
+      CREATE TABLE IF NOT EXISTS user_gear (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        name TEXT NOT NULL,
+        category TEXT NOT NULL,
+        quantity INTEGER DEFAULT 1,
+        notes TEXT,
+        is_ready INTEGER DEFAULT 1,
         created_at TEXT
       )
     `);
@@ -122,9 +158,18 @@ class SQLiteStorage {
         checklist TEXT,
         notes TEXT,
         participants TEXT,
+        distance_km REAL,
+        fuel_cost_total REAL,
+        cost_per_person REAL,
+        fuel_type TEXT,
         created_at TEXT
       )
     `);
+
+    await tryAddCol('trips', 'distance_km', 'REAL');
+    await tryAddCol('trips', 'fuel_cost_total', 'REAL');
+    await tryAddCol('trips', 'cost_per_person', 'REAL');
+    await tryAddCol('trips', 'fuel_type', 'TEXT');
 
     // History (catch reports)
     await this.run(`
@@ -175,6 +220,13 @@ class SQLiteStorage {
       homeDistrict: r.home_district || 'Архангельск',
       bio: r.bio || '',
       avatarUrl: r.avatar_url || '',
+      transportName: r.transport_name || '',
+      totalSeats: r.total_seats != null ? Number(r.total_seats) : 4,
+      availableSeats: r.available_seats != null ? Number(r.available_seats) : 2,
+      fuelType: r.fuel_type || 'АИ-92',
+      fuelPricePerLiter: r.fuel_price != null ? Number(r.fuel_price) : 58.0,
+      fuelConsumptionPer100km: r.fuel_consumption != null ? Number(r.fuel_consumption) : 12.0,
+      tankCapacityLiters: r.tank_capacity != null ? Number(r.tank_capacity) : 60,
       createdAt: r.created_at || ''
     }));
   }
@@ -193,6 +245,13 @@ class SQLiteStorage {
       homeDistrict: r.home_district || 'Архангельск',
       bio: r.bio || '',
       avatarUrl: r.avatar_url || '',
+      transportName: r.transport_name || '',
+      totalSeats: r.total_seats != null ? Number(r.total_seats) : 4,
+      availableSeats: r.available_seats != null ? Number(r.available_seats) : 2,
+      fuelType: r.fuel_type || 'АИ-92',
+      fuelPricePerLiter: r.fuel_price != null ? Number(r.fuel_price) : 58.0,
+      fuelConsumptionPer100km: r.fuel_consumption != null ? Number(r.fuel_consumption) : 12.0,
+      tankCapacityLiters: r.tank_capacity != null ? Number(r.tank_capacity) : 60,
       createdAt: r.created_at || ''
     };
   }
@@ -211,12 +270,19 @@ class SQLiteStorage {
         homeDistrict: updates.homeDistrict || 'Архангельск',
         bio: updates.bio || '',
         avatarUrl: updates.avatarUrl || '',
+        transportName: updates.transportName || '',
+        totalSeats: updates.totalSeats != null ? Number(updates.totalSeats) : 4,
+        availableSeats: updates.availableSeats != null ? Number(updates.availableSeats) : 2,
+        fuelType: updates.fuelType || 'АИ-92',
+        fuelPricePerLiter: updates.fuelPricePerLiter != null ? Number(updates.fuelPricePerLiter) : 58.0,
+        fuelConsumptionPer100km: updates.fuelConsumptionPer100km != null ? Number(updates.fuelConsumptionPer100km) : 12.0,
+        tankCapacityLiters: updates.tankCapacityLiters != null ? Number(updates.tankCapacityLiters) : 60,
         createdAt: new Date().toISOString().split('T')[0]
       };
 
       await this.run(
-        `INSERT OR REPLACE INTO users (id, name, telegram_username, phone, experience_level, boat_type, home_district, bio, fishing_styles, avatar_url, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT OR REPLACE INTO users (id, name, telegram_username, phone, experience_level, boat_type, home_district, bio, fishing_styles, avatar_url, transport_name, total_seats, available_seats, fuel_type, fuel_price, fuel_consumption, tank_capacity, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           newUser.id,
           newUser.name,
@@ -228,6 +294,13 @@ class SQLiteStorage {
           newUser.bio,
           JSON.stringify(newUser.fishingStyles),
           newUser.avatarUrl,
+          newUser.transportName,
+          newUser.totalSeats,
+          newUser.availableSeats,
+          newUser.fuelType,
+          newUser.fuelPricePerLiter,
+          newUser.fuelConsumptionPer100km,
+          newUser.tankCapacityLiters,
           newUser.createdAt
         ]
       );
@@ -236,7 +309,24 @@ class SQLiteStorage {
 
     const merged = { ...existing, ...updates };
     await this.run(
-      `UPDATE users SET name = ?, telegram_username = ?, phone = ?, experience_level = ?, boat_type = ?, home_district = ?, bio = ?, fishing_styles = ?, avatar_url = ? WHERE id = ?`,
+      `UPDATE users SET
+        name = ?,
+        telegram_username = ?,
+        phone = ?,
+        experience_level = ?,
+        boat_type = ?,
+        home_district = ?,
+        bio = ?,
+        fishing_styles = ?,
+        avatar_url = ?,
+        transport_name = ?,
+        total_seats = ?,
+        available_seats = ?,
+        fuel_type = ?,
+        fuel_price = ?,
+        fuel_consumption = ?,
+        tank_capacity = ?
+      WHERE id = ?`,
       [
         merged.name,
         merged.telegramUsername,
@@ -247,10 +337,92 @@ class SQLiteStorage {
         merged.bio,
         JSON.stringify(merged.fishingStyles),
         merged.avatarUrl,
+        merged.transportName || null,
+        merged.totalSeats != null ? Number(merged.totalSeats) : null,
+        merged.availableSeats != null ? Number(merged.availableSeats) : null,
+        merged.fuelType || null,
+        merged.fuelPricePerLiter != null ? Number(merged.fuelPricePerLiter) : null,
+        merged.fuelConsumptionPer100km != null ? Number(merged.fuelConsumptionPer100km) : null,
+        merged.tankCapacityLiters != null ? Number(merged.tankCapacityLiters) : null,
         id
       ]
     );
     return merged;
+  }
+
+  // --- Gear (Снасти) ---
+  async getGear(userId: string): Promise<FishingGear[]> {
+    const rows = await this.all<any>('SELECT * FROM user_gear WHERE user_id = ? ORDER BY rowid DESC', [userId]);
+    return rows.map(r => ({
+      id: r.id,
+      userId: r.user_id,
+      name: r.name,
+      category: r.category as any,
+      quantity: r.quantity ? Number(r.quantity) : 1,
+      notes: r.notes || '',
+      isReady: Boolean(r.is_ready),
+      createdAt: r.created_at || ''
+    }));
+  }
+
+  async addGear(gear: Omit<FishingGear, 'id' | 'createdAt'>): Promise<FishingGear> {
+    const id = `gear-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const now = new Date();
+    const pad = (n: number) => n.toString().padStart(2, '0');
+    const createdAt = `${pad(now.getDate())}.${pad(now.getMonth() + 1)} ${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+    await this.run(
+      `INSERT INTO user_gear (id, user_id, name, category, quantity, notes, is_ready, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        id,
+        gear.userId,
+        gear.name,
+        gear.category,
+        gear.quantity || 1,
+        gear.notes || '',
+        gear.isReady ? 1 : 0,
+        createdAt
+      ]
+    );
+
+    return {
+      ...gear,
+      id,
+      createdAt
+    };
+  }
+
+  async updateGear(id: string, updates: Partial<FishingGear>): Promise<FishingGear | undefined> {
+    const existing = await this.get<any>('SELECT * FROM user_gear WHERE id = ?', [id]);
+    if (!existing) return undefined;
+
+    const name = updates.name !== undefined ? updates.name : existing.name;
+    const category = updates.category !== undefined ? updates.category : existing.category;
+    const quantity = updates.quantity !== undefined ? updates.quantity : existing.quantity;
+    const notes = updates.notes !== undefined ? updates.notes : existing.notes;
+    const isReady = updates.isReady !== undefined ? (updates.isReady ? 1 : 0) : existing.is_ready;
+
+    await this.run(
+      `UPDATE user_gear SET name = ?, category = ?, quantity = ?, notes = ?, is_ready = ? WHERE id = ?`,
+      [name, category, quantity, notes, isReady, id]
+    );
+
+    return {
+      id,
+      userId: existing.user_id,
+      name,
+      category,
+      quantity,
+      notes,
+      isReady: Boolean(isReady),
+      createdAt: existing.created_at
+    };
+  }
+
+  async deleteGear(id: string): Promise<boolean> {
+    await this.run('DELETE FROM user_gear WHERE id = ?', [id]);
+    return true;
   }
 
   // --- Spots ---
@@ -325,6 +497,10 @@ class SQLiteStorage {
       checklist: r.checklist ? JSON.parse(r.checklist) : [],
       notes: r.notes || '',
       participants: r.participants ? JSON.parse(r.participants) : [],
+      distanceKm: r.distance_km != null ? Number(r.distance_km) : undefined,
+      fuelCostTotal: r.fuel_cost_total != null ? Number(r.fuel_cost_total) : undefined,
+      costPerPerson: r.cost_per_person != null ? Number(r.cost_per_person) : undefined,
+      fuelType: r.fuel_type || undefined,
       createdAt: r.created_at || ''
     }));
   }
@@ -349,6 +525,10 @@ class SQLiteStorage {
       checklist: r.checklist ? JSON.parse(r.checklist) : [],
       notes: r.notes || '',
       participants: r.participants ? JSON.parse(r.participants) : [],
+      distanceKm: r.distance_km != null ? Number(r.distance_km) : undefined,
+      fuelCostTotal: r.fuel_cost_total != null ? Number(r.fuel_cost_total) : undefined,
+      costPerPerson: r.cost_per_person != null ? Number(r.cost_per_person) : undefined,
+      fuelType: r.fuel_type || undefined,
       createdAt: r.created_at || ''
     };
   }
@@ -370,8 +550,8 @@ class SQLiteStorage {
     ];
 
     await this.run(
-      `INSERT INTO trips (id, organizer_id, organizer_name, title, destination, lat, lon, target_fish, date, meet_time, meet_place, transport_type, max_crew, status, checklist, notes, participants, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO trips (id, organizer_id, organizer_name, title, destination, lat, lon, target_fish, date, meet_time, meet_place, transport_type, max_crew, status, checklist, notes, participants, distance_km, fuel_cost_total, cost_per_person, fuel_type, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         creator.id,
@@ -390,6 +570,10 @@ class SQLiteStorage {
         JSON.stringify(trip.checklist || []),
         trip.notes || '',
         JSON.stringify(participants),
+        trip.distanceKm || null,
+        trip.fuelCostTotal || null,
+        trip.costPerPerson || null,
+        trip.fuelType || null,
         timeStr
       ].map(v => v === undefined ? null : v)
     );

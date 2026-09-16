@@ -100,29 +100,29 @@ export const PlannedTripsView: React.FC<PlannedTripsViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="space-y-5 max-w-5xl mx-auto">
       {/* Header and Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/90 rounded-2xl border border-slate-800 p-5 shadow-xl">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/90 rounded-2xl border border-slate-800 p-5 shadow-sm">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold text-slate-100">Запланированные Рыбалки</h2>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20">
-              Поморье & Экипажи
+            <h2 className="text-base sm:text-lg font-semibold text-slate-100">Запланированные рыбалки</h2>
+            <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-slate-800 text-slate-300 border border-slate-700">
+              Экипажи
             </span>
           </div>
-          <p className="text-xs text-slate-400 mt-1">
-            Координация совместных выездов на снегоходах, мотособаках и лодках по Белому Морю и Двине.
+          <p className="text-xs text-slate-400 mt-0.5">
+            Совместные выезды на технике и лодках по Белому Морю и Двине с распределением расходов
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 flex-wrap">
           {/* Filters */}
           <div className="flex items-center p-1 rounded-xl bg-slate-950 border border-slate-800 text-xs">
             <button
               onClick={() => setFilter('all')}
               className={`px-3 py-1.5 rounded-lg transition font-medium ${
                 filter === 'all'
-                  ? 'bg-sky-600 text-white'
+                  ? 'bg-slate-800 text-slate-100'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -132,7 +132,7 @@ export const PlannedTripsView: React.FC<PlannedTripsViewProps> = ({
               onClick={() => setFilter('open')}
               className={`px-3 py-1.5 rounded-lg transition font-medium ${
                 filter === 'open'
-                  ? 'bg-sky-600 text-white'
+                  ? 'bg-slate-800 text-slate-100'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -142,7 +142,7 @@ export const PlannedTripsView: React.FC<PlannedTripsViewProps> = ({
               onClick={() => setFilter('my')}
               className={`px-3 py-1.5 rounded-lg transition font-medium ${
                 filter === 'my'
-                  ? 'bg-sky-600 text-white'
+                  ? 'bg-slate-800 text-slate-100'
                   : 'text-slate-400 hover:text-slate-200'
               }`}
             >
@@ -152,9 +152,9 @@ export const PlannedTripsView: React.FC<PlannedTripsViewProps> = ({
 
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs sm:text-sm font-medium transition shadow-md shadow-sky-950 shrink-0"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-100 border border-slate-700 text-xs font-medium transition shrink-0"
           >
-            <Plus className="w-4 h-4" />
+            <Plus className="w-4 h-4 text-emerald-400" />
             <span>Собрать выезд</span>
           </button>
         </div>

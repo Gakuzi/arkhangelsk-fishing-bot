@@ -24,7 +24,7 @@ import {
 } from './types/index.ts';
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('trips');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('profile');
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [activeUser, setActiveUser] = useState<UserProfile | null>(null);
   const [trips, setTrips] = useState<PlannedTrip[]>([]);
@@ -40,7 +40,7 @@ export function App() {
 
     const urlParams = new URLSearchParams(window.location.search);
     const tabParam = urlParams.get('tab') as ActiveTab;
-    if (tabParam && ['trips', 'history', 'spots', 'profile'].includes(tabParam)) {
+    if (tabParam && ['profile', 'trips', 'spots', 'history'].includes(tabParam)) {
       setActiveTab(tabParam);
     }
   }, []);
@@ -117,10 +117,10 @@ export function App() {
 
   // Synchronize native Telegram BackButton with active tab
   useEffect(() => {
-    if (activeTab !== 'trips') {
+    if (activeTab !== 'profile') {
       setBackButton(() => {
         hapticFeedback('selection');
-        setActiveTab('trips');
+        setActiveTab('profile');
       }, true);
     } else {
       hideBackButton();
@@ -128,6 +128,27 @@ export function App() {
   }, [activeTab]);
 
   // Handlers
+  const handleCreateUser = async (name: string, telegramUsername: string) => {
+    const newUser: UserProfile = {
+      id: `u-${Date.now()}`,
+      name,
+      telegramUsername,
+      experienceLevel: 'Любитель',
+      fishingStyles: ['Зимняя со льда'],
+      boatType: 'Без техники',
+      homeDistrict: 'Архангельск',
+      createdAt: new Date().toISOString().split('T')[0]
+    };
+    try {
+      const saved = await api.updateProfile(newUser.id, newUser);
+      setActiveUser(saved);
+      await loadAllData();
+      hapticFeedback('success');
+    } catch (err) {
+      console.error('Failed to create user:', err);
+    }
+  };
+
   const handleSaveProfile = async (updates: Partial<UserProfile>) => {
     if (!activeUser) return;
     const updated = await api.updateProfile(activeUser.id, updates);
@@ -196,25 +217,39 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-sky-500 selection:text-white">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-slate-700 selection:text-white">
       <Navbar
         activeTab={activeTab}
         onTabChange={setActiveTab}
         users={users}
         activeUser={activeUser}
         onSelectUser={setActiveUser}
+        onCreateUser={handleCreateUser}
         botStatus={botStatus}
         tripsCount={trips.filter(t => t.status === 'Набор открыт').length}
       />
 
       {/* Main Content with bottom padding for mobile Telegram navigation */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-3.5 sm:p-6 lg:p-8 pb-24 md:pb-8">
+      <main className="flex-1 max-w-5xl w-full mx-auto p-3.5 sm:p-6 pb-24 md:pb-8">
         {loading ? (
-          <div className="flex items-center justify-center h-64 text-sm text-slate-400">
-            Загрузка приложения рыбака...
+          <div className="flex items-center justify-center h-64 text-xs text-slate-500">
+            Загрузка личного кабинета...
           </div>
         ) : (
           <>
+            {activeTab === 'profile' && activeUser && (
+              <UserProfileView
+                user={activeUser}
+                onSaveProfile={handleSaveProfile}
+                history={history}
+                trips={trips}
+                spots={spots}
+                onCreateTrip={handleCreateTrip}
+                onAddSpot={handleAddSpot}
+                onAddHistory={handleAddHistory}
+              />
+            )}
+
             {activeTab === 'trips' && (
               <PlannedTripsView
                 trips={trips}
@@ -240,21 +275,12 @@ export function App() {
                 onAddSpot={handleAddSpot}
               />
             )}
-
-            {activeTab === 'profile' && activeUser && (
-              <UserProfileView
-                user={activeUser}
-                onSaveProfile={handleSaveProfile}
-                history={history}
-                trips={trips}
-              />
-            )}
           </>
         )}
       </main>
 
-      <footer className="hidden md:block border-t border-slate-900 bg-slate-950 py-4 px-4 text-center text-xs text-slate-500">
-        Архангельск • Рыбалка на Северной Двине и Белом Море • Telegram Bot & Mini App
+      <footer className="hidden md:block border-t border-slate-900 bg-slate-950 py-3.5 px-4 text-center text-[11px] text-slate-400">
+        Поморский Рыбак • Архангельск & Северодвинск • Белое Море & Дельта Северной Двины
       </footer>
     </div>
   );

@@ -10,6 +10,25 @@ export interface UserProfile {
   bio?: string;
   avatarUrl?: string;
   createdAt: string;
+  // Transport & Fuel settings for route calculation & cost sharing
+  transportName?: string;
+  totalSeats?: number;
+  availableSeats?: number;
+  fuelType?: 'АИ-92' | 'АИ-95' | 'Дизель' | 'Смесь 2Т (бензин+масло)' | 'Газ';
+  fuelPricePerLiter?: number;
+  fuelConsumptionPer100km?: number;
+  tankCapacityLiters?: number;
+}
+
+export interface FishingGear {
+  id: string;
+  userId: string;
+  name: string;
+  category: 'Удилища и катушки' | 'Приманки и мормышки' | 'Зимнее снаряжение' | 'Электроника и навигация' | 'Транспорт и лодки' | 'Прочее';
+  quantity?: number;
+  notes?: string;
+  isReady: boolean;
+  createdAt: string;
 }
 
 export interface CatchItem {
@@ -61,6 +80,11 @@ export interface PlannedTrip {
   status: 'Набор открыт' | 'Экипаж набран' | 'Выезд завершен' | 'Отменен';
   notes?: string;
   createdAt: string;
+  // Fuel sharing & routes
+  distanceKm?: number;
+  fuelCostTotal?: number;
+  costPerPerson?: number;
+  fuelType?: string;
 }
 
 export interface FishingSpot {

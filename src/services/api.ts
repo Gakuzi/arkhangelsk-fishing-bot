@@ -5,7 +5,8 @@ import {
   FishingSpot,
   LogEntry,
   SparkCommand,
-  BotStatus
+  BotStatus,
+  FishingGear
 } from '../types/index.ts';
 
 export const api = {
@@ -34,6 +35,41 @@ export const api = {
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
+  },
+
+  // Gear (Снасти)
+  async getGear(userId: string): Promise<FishingGear[]> {
+    const res = await fetch(`/api/gear?userId=${encodeURIComponent(userId)}`);
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  async addGear(gear: Omit<FishingGear, 'id' | 'createdAt'>): Promise<FishingGear> {
+    const res = await fetch('/api/gear', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(gear)
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  async updateGear(id: string, updates: Partial<FishingGear>): Promise<FishingGear> {
+    const res = await fetch(`/api/gear/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  async deleteGear(id: string): Promise<boolean> {
+    const res = await fetch(`/api/gear/${id}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return true;
   },
 
   // Planned Trips

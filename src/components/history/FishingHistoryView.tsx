@@ -156,48 +156,48 @@ export const FishingHistoryView: React.FC<FishingHistoryViewProps> = ({
   };
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="space-y-5 max-w-5xl mx-auto">
       {/* Top Header & Stats */}
-      <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6 shadow-xl space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-slate-900/90 rounded-2xl border border-slate-800 p-5 shadow-sm space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-slate-100">История Рыбалок и Отчеты об Уловах</h2>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                Дневник уловов
+              <h2 className="text-base sm:text-lg font-semibold text-slate-100">История рыбалок и журнал уловов</h2>
+              <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-slate-800 text-slate-300 border border-slate-700">
+                Отчеты
               </span>
             </div>
-            <p className="text-xs text-slate-400 mt-1">
-              Фиксация улова (виды рыб, вес, штуки), проверенных снастей, наживок и отзывов о клеве.
+            <p className="text-xs text-slate-400 mt-0.5">
+              Фиксация улова (виды рыб, вес, штуки), проверенных снастей, наживок и отзывов о клеве
             </p>
           </div>
 
           <button
             onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs sm:text-sm font-medium transition shadow-md shadow-sky-950 shrink-0 self-start sm:self-auto"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-100 border border-slate-700 text-xs font-medium transition shrink-0 self-start sm:self-auto"
           >
-            <Plus className="w-4 h-4" />
-            <span>Добавить отчет о рыбалке</span>
+            <Plus className="w-4 h-4 text-emerald-400" />
+            <span>Добавить отчет</span>
           </button>
         </div>
 
         {/* Aggregate Stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
-          <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800">
-            <div className="text-[11px] text-slate-400">Всего выездов в базе</div>
-            <div className="text-lg font-bold text-slate-100 mt-0.5">{history.length}</div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1 text-center">
+          <div className="p-3 rounded-xl bg-slate-950 border border-slate-850">
+            <div className="text-[10px] text-slate-400 uppercase tracking-wider">Выездов в базе</div>
+            <div className="text-base sm:text-lg font-bold text-slate-100 mt-0.5">{history.length}</div>
           </div>
-          <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800">
-            <div className="text-[11px] text-slate-400">Зафиксировано рыбы</div>
-            <div className="text-lg font-bold text-sky-400 mt-0.5">{totalCount} шт</div>
+          <div className="p-3 rounded-xl bg-slate-950 border border-slate-850">
+            <div className="text-[10px] text-slate-400 uppercase tracking-wider">Всего хвостов</div>
+            <div className="text-base sm:text-lg font-bold text-slate-200 mt-0.5">{totalCount} шт</div>
           </div>
-          <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800">
-            <div className="text-[11px] text-slate-400">Общий вес уловов</div>
-            <div className="text-lg font-bold text-emerald-400 mt-0.5">{totalWeight.toFixed(1)} кг</div>
+          <div className="p-3 rounded-xl bg-slate-950 border border-slate-850">
+            <div className="text-[10px] text-slate-400 uppercase tracking-wider">Общий вес</div>
+            <div className="text-base sm:text-lg font-bold text-emerald-400 mt-0.5">{totalWeight.toFixed(1)} кг</div>
           </div>
-          <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800">
-            <div className="text-[11px] text-slate-400">Трофеев Поморья</div>
-            <div className="text-lg font-bold text-amber-400 mt-0.5">{trophyCount} 🏆</div>
+          <div className="p-3 rounded-xl bg-slate-950 border border-slate-850">
+            <div className="text-[10px] text-slate-400 uppercase tracking-wider">Трофеев</div>
+            <div className="text-base sm:text-lg font-bold text-amber-400 mt-0.5">{trophyCount} 🏆</div>
           </div>
         </div>
       </div>
