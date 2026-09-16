@@ -573,6 +573,34 @@ class SQLiteStorage {
     return newSpot;
   }
 
+  async updateSpot(id: string, updates: Partial<FishingSpot>): Promise<FishingSpot | undefined> {
+    const spots = await this.getSpots();
+    const existing = spots.find(s => s.id === id);
+    if (!existing) return undefined;
+
+    const merged = { ...existing, ...updates };
+    await this.run(
+      `UPDATE spots SET name = ?, lat = ?, lon = ?, area = ?, recommended_fish = ?, season = ?, description = ?, depth_meters = ? WHERE id = ?`,
+      [
+        merged.name,
+        merged.lat,
+        merged.lon,
+        merged.area,
+        JSON.stringify(merged.recommendedFish || []),
+        merged.season,
+        merged.description,
+        merged.depthMeters,
+        id
+      ]
+    );
+    return merged;
+  }
+
+  async deleteSpot(id: string): Promise<boolean> {
+    await this.run('DELETE FROM spots WHERE id = ?', [id]);
+    return true;
+  }
+
   // --- Trips ---
   async getTrips(): Promise<PlannedTrip[]> {
     const rows = await this.all<any>('SELECT * FROM trips ORDER BY date ASC, meet_time ASC');
@@ -762,6 +790,49 @@ class SQLiteStorage {
     return { success: true, message: 'Вы покинули экипаж', trip };
   }
 
+  async updateTrip(id: string, updates: Partial<PlannedTrip>): Promise<PlannedTrip | undefined> {
+    const trip = await this.getTripById(id);
+    if (!trip) return undefined;
+
+    const updated = { ...trip, ...updates };
+    const tripType = updated.tripType || (updated.hasCar !== false ? 'driver' : 'passenger');
+    const hasCar = updated.hasCar !== undefined ? (updated.hasCar ? 1 : 0) : (tripType === 'driver' ? 1 : 0);
+    const passengerSeatsNeeded = updated.passengerSeatsNeeded || 1;
+
+    await this.run(
+      `UPDATE trips SET title = ?, destination = ?, lat = ?, lon = ?, target_fish = ?, date = ?, meet_time = ?, meet_place = ?, transport_type = ?, max_crew = ?, status = ?, checklist = ?, notes = ?, distance_km = ?, fuel_cost_total = ?, cost_per_person = ?, fuel_type = ?, trip_type = ?, has_car = ?, passenger_seats_needed = ? WHERE id = ?`,
+      [
+        updated.title,
+        updated.destination,
+        updated.coordinates?.lat || null,
+        updated.coordinates?.lon || null,
+        JSON.stringify(updated.targetFish || []),
+        updated.date,
+        updated.meetTime,
+        updated.meetPlace,
+        updated.transportType,
+        updated.maxCrew,
+        updated.status,
+        JSON.stringify(updated.checklist || []),
+        updated.notes || '',
+        updated.distanceKm || null,
+        updated.fuelCostTotal || null,
+        updated.costPerPerson || null,
+        updated.fuelType || null,
+        tripType,
+        hasCar,
+        passengerSeatsNeeded,
+        id
+      ]
+    );
+    return updated;
+  }
+
+  async deleteTrip(id: string): Promise<boolean> {
+    await this.run('DELETE FROM trips WHERE id = ?', [id]);
+    return true;
+  }
+
   // --- History ---
   async getHistory(): Promise<TripHistory[]> {
     const rows = await this.all<any>('SELECT * FROM history ORDER BY rowid DESC');
@@ -821,6 +892,38 @@ class SQLiteStorage {
 
     await this.addLog(newEntry.authorName, `🐟 Опубликовал отчет об улове: ${newEntry.location}`, 'text');
     return newEntry;
+  }
+
+  async updateHistory(id: string, updates: Partial<TripHistory>): Promise<TripHistory | undefined> {
+    const rows = await this.getHistory();
+    const existing = rows.find(r => r.id === id);
+    if (!existing) return undefined;
+
+    const merged = { ...existing, ...updates };
+    await this.run(
+      `UPDATE history SET date = ?, location = ?, lat = ?, lon = ?, weather = ?, duration_hours = ?, catches = ?, gear_used = ?, bait_used = ?, review = ?, rating = ?, depth_meters = ? WHERE id = ?`,
+      [
+        merged.date,
+        merged.location,
+        merged.coordinates?.lat || null,
+        merged.coordinates?.lon || null,
+        merged.weather,
+        merged.durationHours,
+        JSON.stringify(merged.catches || []),
+        JSON.stringify(merged.gearUsed || []),
+        JSON.stringify(merged.baitUsed || []),
+        merged.review,
+        merged.rating,
+        merged.depthMeters || null,
+        id
+      ]
+    );
+    return merged;
+  }
+
+  async deleteHistory(id: string): Promise<boolean> {
+    await this.run('DELETE FROM history WHERE id = ?', [id]);
+    return true;
   }
 
   // --- Logs ---

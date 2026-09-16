@@ -191,6 +191,25 @@ apiRouter.post('/trips', async (req: Request, res: Response) => {
   }
 });
 
+apiRouter.put('/trips/:id', async (req: Request, res: Response) => {
+  try {
+    const updated = await sqliteStorage.updateTrip(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ error: 'Trip not found' });
+    res.json(updated);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+apiRouter.delete('/trips/:id', async (req: Request, res: Response) => {
+  try {
+    await sqliteStorage.deleteTrip(req.params.id);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 apiRouter.post('/trips/:id/join', async (req: Request, res: Response) => {
   try {
     const { userId, userName, telegramUsername } = req.body;
@@ -254,6 +273,25 @@ apiRouter.post('/history', async (req: Request, res: Response) => {
   }
 });
 
+apiRouter.put('/history/:id', async (req: Request, res: Response) => {
+  try {
+    const updated = await sqliteStorage.updateHistory(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ error: 'History not found' });
+    res.json(updated);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+apiRouter.delete('/history/:id', async (req: Request, res: Response) => {
+  try {
+    await sqliteStorage.deleteHistory(req.params.id);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Fishing Spots
 apiRouter.get('/spots', async (req: Request, res: Response) => {
   try {
@@ -272,6 +310,25 @@ apiRouter.post('/spots', async (req: Request, res: Response) => {
     }
     const newSpot = await sqliteStorage.addSpot(spot);
     res.status(201).json(newSpot);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+apiRouter.put('/spots/:id', async (req: Request, res: Response) => {
+  try {
+    const updated = await sqliteStorage.updateSpot(req.params.id, req.body);
+    if (!updated) return res.status(404).json({ error: 'Spot not found' });
+    res.json(updated);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+apiRouter.delete('/spots/:id', async (req: Request, res: Response) => {
+  try {
+    await sqliteStorage.deleteSpot(req.params.id);
+    res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

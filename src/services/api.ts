@@ -104,6 +104,24 @@ export const api = {
     return res.json();
   },
 
+  async updateTrip(id: string, updates: Partial<PlannedTrip>): Promise<PlannedTrip> {
+    const res = await fetch(`/api/trips/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  async deleteTrip(id: string): Promise<boolean> {
+    const res = await fetch(`/api/trips/${id}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return true;
+  },
+
   async joinTrip(tripId: string, userId: string): Promise<{ success: boolean; message: string; trip?: PlannedTrip }> {
     const res = await fetch(`/api/trips/${tripId}/join`, {
       method: 'POST',
@@ -140,6 +158,24 @@ export const api = {
     return res.json();
   },
 
+  async updateHistory(id: string, updates: Partial<TripHistory>): Promise<TripHistory> {
+    const res = await fetch(`/api/history/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  async deleteHistory(id: string): Promise<boolean> {
+    const res = await fetch(`/api/history/${id}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return true;
+  },
+
   // Spots
   async getSpots(): Promise<FishingSpot[]> {
     const res = await fetch('/api/spots');
@@ -154,6 +190,24 @@ export const api = {
     });
     if (!res.ok) throw new Error(await res.text());
     return res.json();
+  },
+
+  async updateSpot(id: string, updates: Partial<FishingSpot>): Promise<FishingSpot> {
+    const res = await fetch(`/api/spots/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
+  async deleteSpot(id: string): Promise<boolean> {
+    const res = await fetch(`/api/spots/${id}`, {
+      method: 'DELETE'
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return true;
   },
 
   // Logs & Simulation

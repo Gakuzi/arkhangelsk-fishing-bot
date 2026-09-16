@@ -28,8 +28,10 @@ interface PlannedTripsViewProps {
   trips: PlannedTrip[];
   activeUser: UserProfile | null;
   onJoinTrip: (tripId: string) => Promise<void>;
-  onLeaveTrip: (tripId: string) => Promise<void>;
+  onLeaveTrip: (tripId: string, reason?: string) => Promise<void>;
   onCreateTrip: (trip: any) => Promise<void>;
+  onEditTrip?: (tripId: string, trip: any) => Promise<void>;
+  onDeleteTrip?: (tripId: string) => Promise<void>;
 }
 
 // Popular fishing spots in Arkhangelsk region
@@ -47,10 +49,15 @@ export const PlannedTripsView: React.FC<PlannedTripsViewProps> = ({
   activeUser,
   onJoinTrip,
   onLeaveTrip,
-  onCreateTrip
+  onCreateTrip,
+  onEditTrip,
+  onDeleteTrip
 }) => {
   const [filter, setFilter] = useState<'all' | 'driver' | 'passenger' | 'my'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [leaveReasonModal, setLeaveReasonModal] = useState<{tripId: string} | null>(null);
+  const [leaveReason, setLeaveReason] = useState('');
+  const [editingTripId, setEditingTripId] = useState<string | null>(null);
 
   // New Trip Form state
   const [tripType, setTripType] = useState<'driver' | 'passenger'>('driver');
@@ -152,7 +159,7 @@ export const PlannedTripsView: React.FC<PlannedTripsViewProps> = ({
         ? passengerSeatsNeeded + 2 // Passenger + companion + driver + 1
         : Number(maxCrew);
 
-      await onCreateTrip({
+      const tripData = {
         organizerId: activeUser.id,
         organizerName: activeUser.name,
         title,
@@ -176,8 +183,15 @@ export const PlannedTripsView: React.FC<PlannedTripsViewProps> = ({
         ],
         status: 'Набор открыт',
         notes: `${isPassenger ? '🚶‍♂️ Пассажир ищет авто. ' : '🚗 Водитель с авто. '}${notes}`
-      });
+      };
 
+      if (editingTripId && onEditTrip) {
+        await onEditTrip(editingTripId, tripData);
+      } else {
+        await onCreateTrip(tripData);
+      }
+
+      setEditingTripId(null);
       setIsModalOpen(false);
       setTitle('');
       hapticFeedback('success');
@@ -471,16 +485,55 @@ export const PlannedTripsView: React.FC<PlannedTripsViewProps> = ({
                         <CheckCircle2 className="w-4 h-4" />
                         Вы в экипаже
                       </span>
-                      {!isOrganizer && (
+                      {!isOrganizer ? (
                         <button
                           onClick={() => {
                             hapticFeedback('selection');
-                            onLeaveTrip(trip.id);
+                            setLeaveReasonModal({ tripId: trip.id });
                           }}
                           className="px-2.5 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/40 text-xs font-medium transition"
                         >
                           Выйти
                         </button>
+                      ) : (
+                        <div className="flex gap-2">
+                          {onEditTrip && (
+                            <button
+                              onClick={() => {
+                                hapticFeedback('selection');
+                                setEditingTripId(trip.id);
+                                // Pre-fill state (would need to set all state fields here for editing)
+                                setTripType(trip.tripType || 'driver');
+                                setTitle(trip.title);
+                                setDestination(trip.destination);
+                                setDestCoords(trip.coordinates || null);
+                                setTargetFishInput(trip.targetFish?.join(', ') || '');
+                                setDate(trip.date);
+                                setMeetTime(trip.meetTime);
+                                setMeetPlace(trip.meetPlace || '');
+                                setMaxCrew(trip.maxCrew);
+                                setNotes(trip.notes || '');
+                                setIsModalOpen(true);
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-blue-950/40 hover:bg-blue-900/60 text-blue-300 border border-blue-800/40 text-xs font-medium transition"
+                            >
+                              Изменить
+                            </button>
+                          )}
+                          {onDeleteTrip && (
+                            <button
+                              onClick={() => {
+                                if (window.confirm('Вы точно хотите отменить и удалить этот выезд?')) {
+                                  hapticFeedback('heavy');
+                                  onDeleteTrip(trip.id);
+                                }
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/40 text-xs font-medium transition"
+                            >
+                              Удалить
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
                   ) : (
@@ -837,6 +890,59 @@ export const PlannedTripsView: React.FC<PlannedTripsViewProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Leave Reason Modal */}
+      {leaveReasonModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl relative">
+            <button
+              onClick={() => {
+                setLeaveReasonModal(null);
+                setLeaveReason('');
+              }}
+              className="absolute right-4 top-4 text-slate-500 hover:text-slate-300"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <h3 className="text-xl font-semibold text-slate-100 mb-2">Причина отмены</h3>
+            <p className="text-sm text-slate-400 mb-4">
+              Сообщите организатору, почему вы не сможете поехать.
+            </p>
+            <textarea
+              value={leaveReason}
+              onChange={(e) => setLeaveReason(e.target.value)}
+              placeholder="Например: Заболел, вызвали на работу, сломалась машина..."
+              className="w-full h-24 rounded-xl bg-slate-950 border border-slate-800 px-4 py-3 text-slate-200 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 resize-none mb-4"
+              required
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setLeaveReasonModal(null);
+                  setLeaveReason('');
+                }}
+                className="px-4 py-2 rounded-xl text-slate-300 hover:bg-slate-800 font-medium text-sm transition"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => {
+                  if (leaveReason.trim()) {
+                    onLeaveTrip(leaveReasonModal.tripId, leaveReason.trim());
+                    setLeaveReasonModal(null);
+                    setLeaveReason('');
+                  } else {
+                    alert('Пожалуйста, укажите причину.');
+                  }
+                }}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-sm transition shadow-md shadow-rose-950"
+              >
+                Покинуть экипаж
+              </button>
+            </div>
           </div>
         </div>
       )}

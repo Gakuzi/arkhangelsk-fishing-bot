@@ -16,16 +16,21 @@ interface FishingSpotsViewProps {
   spots: FishingSpot[];
   activeUser: UserProfile | null;
   onAddSpot: (spot: any) => Promise<void>;
+  onEditSpot?: (id: string, spot: any) => Promise<void>;
+  onDeleteSpot?: (id: string) => Promise<void>;
 }
 
 export const FishingSpotsView: React.FC<FishingSpotsViewProps> = ({
   spots,
   activeUser,
-  onAddSpot
+  onAddSpot,
+  onEditSpot,
+  onDeleteSpot
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedSpot, setSelectedSpot] = useState<FishingSpot | null>(spots[0] || null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingSpotId, setEditingSpotId] = useState<string | null>(null);
 
   // Form State
   const [name, setName] = useState('');
@@ -53,7 +58,7 @@ export const FishingSpotsView: React.FC<FishingSpotsViewProps> = ({
     setSubmitting(true);
     try {
       const recommendedFish = recommendedFishInput.split(',').map(s => s.trim()).filter(Boolean);
-      await onAddSpot({
+      const spotData = {
         name,
         lat: Number(lat),
         lon: Number(lon),
@@ -63,7 +68,15 @@ export const FishingSpotsView: React.FC<FishingSpotsViewProps> = ({
         depthMeters,
         description: description || 'Рыбное место Поморья',
         addedBy: activeUser.name
-      });
+      };
+
+      if (editingSpotId && onEditSpot) {
+        await onEditSpot(editingSpotId, spotData);
+      } else {
+        await onAddSpot(spotData);
+      }
+      
+      setEditingSpotId(null);
       setIsModalOpen(false);
       setName('');
       setDescription('');
@@ -162,17 +175,57 @@ export const FishingSpotsView: React.FC<FishingSpotsViewProps> = ({
                     {copiedId === s.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
                     <span>{s.lat.toFixed(2)}, {s.lon.toFixed(2)}</span>
                   </button>
-
-                  <a
-                    href={`https://yandex.ru/maps/?rtext=~${s.lat}%2C${s.lon}&rtt=auto`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={e => e.stopPropagation()}
-                    className="text-slate-400 hover:text-slate-200 flex items-center gap-1"
-                  >
-                    <span>Маршрут</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
+                  <div className="flex gap-2 items-center">
+                    {(activeUser && s.addedBy === activeUser.name) && (
+                      <>
+                        {onEditSpot && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingSpotId(s.id);
+                              setName(s.name);
+                              setLat(s.lat);
+                              setLon(s.lon);
+                              setArea(s.area);
+                              setRecommendedFishInput(s.recommendedFish?.join(', ') || '');
+                              setSeason(s.season as any);
+                              setDepthMeters(s.depthMeters || '');
+                              setDescription(s.description || '');
+                              setIsModalOpen(true);
+                            }}
+                            className="text-blue-400 hover:text-blue-300 transition"
+                          >
+                            Изменить
+                          </button>
+                        )}
+                        {onDeleteSpot && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm('Удалить эту точку?')) {
+                                onDeleteSpot(s.id);
+                              }
+                            }}
+                            className="text-rose-400 hover:text-rose-300 transition"
+                          >
+                            Удалить
+                          </button>
+                        )}
+                      </>
+                    )}
+                    <a
+                      href={`https://yandex.ru/maps/?rtext=~${s.lat}%2C${s.lon}&rtt=auto`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={e => e.stopPropagation()}
+                      className="text-slate-400 hover:text-slate-200 flex items-center gap-1 ml-1"
+                    >
+                      <span>Маршрут</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
                 </div>
               </div>
             );

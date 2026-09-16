@@ -171,10 +171,32 @@ export function App() {
     await loadAllData();
   };
 
-  const handleLeaveTrip = async (tripId: string) => {
+  const handleLeaveTrip = async (tripId: string, reason?: string) => {
     if (!user) return;
+    const trip = trips.find(t => t.id === tripId);
     await api.leaveTrip(tripId, user.id);
     hapticFeedback('medium');
+    
+    if (isInsideTelegram() && trip && reason) {
+      await api.simulateBotMessage({
+        messageType: 'text',
+        text: `Я не смогу поехать на выезд "${trip.title}", так как: ${reason}`,
+        user: user.name
+      });
+    }
+    
+    await loadAllData();
+  };
+
+  const handleEditTrip = async (tripId: string, tripData: any) => {
+    await api.updateTrip(tripId, tripData);
+    hapticFeedback('success');
+    await loadAllData();
+  };
+
+  const handleDeleteTrip = async (tripId: string) => {
+    await api.deleteTrip(tripId);
+    hapticFeedback('heavy');
     await loadAllData();
   };
 
@@ -199,6 +221,18 @@ export function App() {
     await loadAllData();
   };
 
+  const handleEditHistory = async (id: string, updates: any) => {
+    await api.updateHistory(id, updates);
+    hapticFeedback('success');
+    await loadAllData();
+  };
+
+  const handleDeleteHistory = async (id: string) => {
+    await api.deleteHistory(id);
+    hapticFeedback('heavy');
+    await loadAllData();
+  };
+
   const handleAddSpot = async (spot: any) => {
     await api.addSpot(spot);
     hapticFeedback('success');
@@ -210,6 +244,18 @@ export function App() {
         lon: spot.lon
       });
     }
+    await loadAllData();
+  };
+
+  const handleEditSpot = async (id: string, updates: any) => {
+    await api.updateSpot(id, updates);
+    hapticFeedback('success');
+    await loadAllData();
+  };
+
+  const handleDeleteSpot = async (id: string) => {
+    await api.deleteSpot(id);
+    hapticFeedback('heavy');
     await loadAllData();
   };
 
@@ -252,6 +298,8 @@ export function App() {
                 onJoinTrip={handleJoinTrip}
                 onLeaveTrip={handleLeaveTrip}
                 onCreateTrip={handleCreateTrip}
+                onEditTrip={handleEditTrip}
+                onDeleteTrip={handleDeleteTrip}
               />
             )}
 
@@ -260,6 +308,8 @@ export function App() {
                 history={history}
                 activeUser={user}
                 onAddHistory={handleAddHistory}
+                onEditHistory={handleEditHistory}
+                onDeleteHistory={handleDeleteHistory}
               />
             )}
 
@@ -268,6 +318,8 @@ export function App() {
                 spots={spots}
                 activeUser={user}
                 onAddSpot={handleAddSpot}
+                onEditSpot={handleEditSpot}
+                onDeleteSpot={handleDeleteSpot}
               />
             )}
           </>

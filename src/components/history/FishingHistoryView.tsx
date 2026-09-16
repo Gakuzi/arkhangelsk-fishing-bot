@@ -19,6 +19,8 @@ interface FishingHistoryViewProps {
   history: TripHistory[];
   activeUser: UserProfile | null;
   onAddHistory: (entry: any) => Promise<void>;
+  onEditHistory?: (id: string, entry: any) => Promise<void>;
+  onDeleteHistory?: (id: string) => Promise<void>;
 }
 
 const COMMON_FISH = [
@@ -55,9 +57,12 @@ const COMMON_BAIT = [
 export const FishingHistoryView: React.FC<FishingHistoryViewProps> = ({
   history,
   activeUser,
-  onAddHistory
+  onAddHistory,
+  onEditHistory,
+  onDeleteHistory
 }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingHistoryId, setEditingHistoryId] = useState<string | null>(null);
 
   // Form State
   const [location, setLocation] = useState('Остров Мудьюг (Сухое Море)');
@@ -133,7 +138,7 @@ export const FishingHistoryView: React.FC<FishingHistoryViewProps> = ({
 
     setSubmitting(true);
     try {
-      await onAddHistory({
+      const historyData = {
         userId: activeUser.id,
         authorName: activeUser.name,
         date,
@@ -146,7 +151,15 @@ export const FishingHistoryView: React.FC<FishingHistoryViewProps> = ({
         catches,
         gearUsed: selectedGear,
         baitUsed: selectedBait
-      });
+      };
+
+      if (editingHistoryId && onEditHistory) {
+        await onEditHistory(editingHistoryId, historyData);
+      } else {
+        await onAddHistory(historyData);
+      }
+      
+      setEditingHistoryId(null);
       setIsModalOpen(false);
     } catch (err) {
       console.error(err);
@@ -215,7 +228,7 @@ export const FishingHistoryView: React.FC<FishingHistoryViewProps> = ({
               className="bg-slate-900 rounded-2xl border border-slate-800 p-5 shadow-xl hover:border-slate-700 transition space-y-4"
             >
               {/* Header row */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-800/80">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-2 pb-3 border-b border-slate-800/80">
                 <div className="flex items-center gap-2.5">
                   <div className="w-9 h-9 rounded-xl bg-sky-950/80 border border-sky-600/30 flex items-center justify-center text-sky-400">
                     <Fish className="w-4 h-4" />
@@ -229,20 +242,59 @@ export const FishingHistoryView: React.FC<FishingHistoryViewProps> = ({
                     </div>
                   </div>
                 </div>
-
-                {/* Rating stars */}
-                <div className="flex items-center gap-1">
-                  {[1, 2, 3, 4, 5].map(star => (
-                    <Star
-                      key={star}
-                      className={`w-4 h-4 ${
-                        star <= item.rating
-                          ? 'text-amber-400 fill-amber-400'
-                          : 'text-slate-700'
-                      }`}
-                    />
-                  ))}
-                  <span className="text-xs text-slate-400 ml-1.5 font-medium">{item.rating}/5</span>
+                <div className="flex flex-col items-end gap-2">
+                  {/* Rating stars */}
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map(star => (
+                      <Star
+                        key={star}
+                        className={`w-4 h-4 ${
+                          star <= item.rating
+                            ? 'text-amber-400 fill-amber-400'
+                            : 'text-slate-700'
+                        }`}
+                      />
+                    ))}
+                    <span className="text-xs text-slate-400 ml-1.5 font-medium">{item.rating}/5</span>
+                  </div>
+                  
+                  {activeUser && item.userId === activeUser.id && (
+                    <div className="flex items-center gap-3 text-xs mt-1">
+                      {onEditHistory && (
+                        <button
+                          onClick={() => {
+                            setEditingHistoryId(item.id);
+                            setLocation(item.location);
+                            setDate(item.date);
+                            setWeather(item.weather);
+                            setDurationHours(item.durationHours);
+                            setDepthMeters(item.depthMeters || 0);
+                            setRating(item.rating);
+                            setReview(item.review || '');
+                            setCatches(item.catches || []);
+                            setSelectedGear(item.gearUsed || []);
+                            setSelectedBait(item.baitUsed || []);
+                            setIsModalOpen(true);
+                          }}
+                          className="text-blue-400 hover:text-blue-300 transition"
+                        >
+                          Изменить
+                        </button>
+                      )}
+                      {onDeleteHistory && (
+                        <button
+                          onClick={() => {
+                            if (window.confirm('Точно удалить этот отчет?')) {
+                              onDeleteHistory(item.id);
+                            }
+                          }}
+                          className="text-rose-400 hover:text-rose-300 transition"
+                        >
+                          Удалить
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 
