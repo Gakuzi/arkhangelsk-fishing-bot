@@ -8,6 +8,6 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 3000,
-    allowedHosts: true,
+    allowedHosts: ['fishing-bot.e-klimov.ru', '.e-klimov.ru', 'localhost'],
   },
 });
