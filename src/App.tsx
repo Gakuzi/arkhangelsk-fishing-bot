@@ -84,14 +84,31 @@ export function App() {
       // If user profile is not set yet (or browser outside Telegram)
       if (personalProfile) {
         setUser(personalProfile);
+        try {
+          localStorage.setItem('pomor_last_tg_id', personalProfile.id);
+        } catch {}
       } else if (!user) {
-        // Browser / Local Dev fallback
+        // Browser / Local Dev fallback: find previously synced user or Evgeny Klimov
         const existingUsers = await api.getUsers().catch(() => []);
-        if (existingUsers.length > 0) {
+        let lastSavedId: string | null = null;
+        try {
+          lastSavedId = localStorage.getItem('pomor_last_tg_id');
+        } catch {}
+
+        const userBySavedId = lastSavedId ? existingUsers.find(u => u.id === lastSavedId) : null;
+        const userByUsername = existingUsers.find(
+          u => (u.telegramUsername || '').toLowerCase() === 'eklimov84'
+        );
+
+        if (userBySavedId) {
+          setUser(userBySavedId);
+        } else if (userByUsername) {
+          setUser(userByUsername);
+        } else if (existingUsers.length > 0) {
           setUser(existingUsers[0]);
         } else {
           const fallbackUser = await api.syncTelegramUser({
-            id: 'default-fisherman',
+            id: 'EKlimov84',
             firstName: 'Евгений',
             lastName: 'Климов',
             username: 'EKlimov84',

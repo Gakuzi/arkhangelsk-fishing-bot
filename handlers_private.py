@@ -317,3 +317,64 @@ async def handle_private_location(message: Message):
         parse_mode="HTML",
         reply_markup=keyboards.get_spots_keyboard()
     )
+
+@router.message(F.chat.type == "private", Command(commands=["help", "помощь"]))
+async def handle_help_command(message: Message):
+    user = message.from_user.first_name if message.from_user else "Рыбак"
+    help_text = (
+        f"🎣 <b>Поморский Рыболовный Бот — Справка</b>\n\n"
+        f"Здравствуйте, <b>{user}</b>! Бот помогает рыбакам Архангельска и области собирать экипажи, рассчитывать расходы на бензин и вести точки лова:\n\n"
+        f"<b>Быстрые команды:</b>\n"
+        f"• 🌊 <code>/app</code> — Запустить Mini App во весь экран\n"
+        f"• 🚗 <code>/car</code> — Мой автомобиль и расчёт поездки\n"
+        f"• ⛽️ <code>/fuel 120</code> — Калькулятор бензина на 120 км\n"
+        f"• 📅 <code>/trips</code> — Запланированные выезды и экипажи\n"
+        f"• 🗺 <code>/spots</code> — Координаты рыбных мест на карте\n"
+        f"• 🐟 <code>/history</code> — Журнал уловов и трофеев\n"
+        f"• 👤 <code>/profile</code> — Личный кабинет рыбака\n\n"
+        f"<blockquote>💡 <b>Инлайн-режим в группах:</b>\n"
+        f"В любом чате наберите <code>@{BOT_USERNAME}</code>, чтобы отправить карточку машины, точку или выезд товарищам!</blockquote>"
+    )
+    await message.answer(
+        help_text,
+        parse_mode="HTML",
+        reply_markup=keyboards.get_webapp_inline_keyboard()
+    )
+
+@router.message(F.chat.type == "private", F.text)
+async def handle_private_text_fallback(message: Message):
+    """Универсальный обработчик любого текста от пользователя"""
+    user = message.from_user.first_name if message.from_user else "Рыбак"
+    text = (message.text or "").strip().lower()
+
+    # Умное распознавание намерений по ключевым словам
+    if any(k in text for k in ["машин", "авто", "бензин", "расход", "топлив", "бак"]):
+        return await handle_car_command(message)
+
+    if any(k in text for k in ["выезд", "экипаж", "поездк", "собраться", "едем"]):
+        return await handle_trips_command(message)
+
+    if any(k in text for k in ["точк", "карт", "мест", "где ловит", "координат"]):
+        return await handle_spots_command(message)
+
+    if any(k in text for k in ["улов", "трофей", "поймал", "рыб", "отчет"]):
+        return await handle_history_command(message)
+
+    if any(k in text for k in ["профил", "кабинет", "снаст", "обо мне"]):
+        return await handle_profile_command(message)
+
+    if any(k in text for k in ["помощ", "команд", "что умееш", "help"]):
+        return await handle_help_command(message)
+
+    # Вежливый ответ на любое другое сообщение
+    reply_text = (
+        f"👋 <b>{user}</b>, я на связи!\n\n"
+        f"Вы написали: «<i>{message.text}</i>»\n\n"
+        f"Выберите действие кнопками ниже или запустите <b>Поморский Mini App</b>:"
+    )
+    await message.answer(
+        reply_text,
+        parse_mode="HTML",
+        reply_markup=keyboards.get_webapp_inline_keyboard()
+    )
+

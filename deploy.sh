@@ -30,6 +30,8 @@ fi
 echo "🔨 Building frontend web assets..."
 npm run build
 
+chmod +x run_bot.sh deploy.sh 2>/dev/null || true
+
 # 5. Reload / restart PM2 for both WebApp and Bot
 echo "🚀 Reloading services in PM2..."
 if command -v pm2 &> /dev/null; then

@@ -277,17 +277,19 @@ export const UserProfileView: React.FC<UserProfileViewProps> = ({
       <div className="rounded-2xl bg-slate-900/90 border border-slate-800 p-5 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-lg text-slate-200 shrink-0">
+            <div className="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-lg text-slate-200 shrink-0 overflow-hidden relative">
               {user.avatarUrl ? (
                 <img
                   src={user.avatarUrl}
                   alt={user.name}
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-cover rounded-xl"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none';
+                  }}
                 />
-              ) : (
-                user.name[0] || 'Р'
-              )}
+              ) : null}
+              <span className="select-none">{user.name[0] || 'Р'}</span>
             </div>
 
             <div className="min-w-0">

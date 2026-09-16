@@ -19,6 +19,52 @@ apiRouter.get('/config', (req: Request, res: Response) => {
 });
 
 // Users & Personal Cabinet
+apiRouter.get('/telegram-avatar/:userId', async (req: Request, res: Response) => {
+  try {
+    const rawId = req.params.userId.replace(/^tg-/, '').trim();
+    if (!config.telegramToken || !/^\d+$/.test(rawId)) {
+      return res.status(404).send('Invalid user ID or no bot token');
+    }
+
+    // 1. Fetch user's profile photos via Telegram Bot API
+    const photosRes = await fetch(
+      `https://api.telegram.org/bot${config.telegramToken}/getUserProfilePhotos?user_id=${rawId}&limit=1`
+    );
+    const photosData = await photosRes.json();
+    if (!photosData.ok || !photosData.result?.photos?.length || !photosData.result.photos[0]?.length) {
+      return res.status(404).send('No Telegram profile photo found');
+    }
+
+    // Pick highest resolution photo
+    const photoSizes = photosData.result.photos[0];
+    const bestPhoto = photoSizes[photoSizes.length - 1];
+
+    // 2. Get file path from Telegram
+    const fileRes = await fetch(
+      `https://api.telegram.org/bot${config.telegramToken}/getFile?file_id=${bestPhoto.file_id}`
+    );
+    const fileData = await fileRes.json();
+    if (!fileData.ok || !fileData.result?.file_path) {
+      return res.status(404).send('File not found in Telegram');
+    }
+
+    // 3. Download and stream image safely without exposing bot token
+    const fileUrl = `https://api.telegram.org/file/bot${config.telegramToken}/${fileData.result.file_path}`;
+    const imgRes = await fetch(fileUrl);
+    if (!imgRes.ok) {
+      return res.status(imgRes.status).send('Failed to fetch image from Telegram CDN');
+    }
+
+    const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=86400'); // 24 hour cache
+    const arrayBuffer = await imgRes.arrayBuffer();
+    return res.send(Buffer.from(arrayBuffer));
+  } catch (err: any) {
+    return res.status(500).send(err.message);
+  }
+});
+
 apiRouter.post('/users/sync-telegram', async (req: Request, res: Response) => {
   try {
     const { id, firstName, lastName, username, photoUrl } = req.body;

@@ -52,6 +52,21 @@ def init_db():
         except Exception:
             pass
 
+    # Clean up old external stock avatars
+    try:
+        cursor.execute("""
+            UPDATE users 
+            SET avatar_url = '' 
+            WHERE avatar_url LIKE '%unsplash%' 
+               OR avatar_url LIKE '%randomuser%' 
+               OR avatar_url LIKE '%placeholder%'
+               OR avatar_url LIKE '%pravatar%'
+               OR avatar_url LIKE '%images.%'
+        """)
+        conn.commit()
+    except Exception:
+        pass
+
     # Spots
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS spots (

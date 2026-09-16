@@ -89,17 +89,19 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }`}
                 title="Перейти в личный кабинет"
               >
-                <div className="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700 overflow-hidden flex items-center justify-center text-xs font-semibold text-slate-200 shrink-0">
+                <div className="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700 overflow-hidden flex items-center justify-center text-xs font-semibold text-slate-200 shrink-0 relative">
                   {user?.avatarUrl ? (
                     <img
                       src={user.avatarUrl}
                       alt={user.name}
                       referrerPolicy="no-referrer"
                       className="w-full h-full object-cover rounded-lg"
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = 'none';
+                      }}
                     />
-                  ) : (
-                    <span>{user?.name?.[0] || 'Р'}</span>
-                  )}
+                  ) : null}
+                  <span className="select-none">{user?.name?.[0] || 'Р'}</span>
                 </div>
                 <div className="text-left hidden xs:block sm:block max-w-[130px]">
                   <div className="text-xs font-medium text-slate-200 leading-tight truncate">

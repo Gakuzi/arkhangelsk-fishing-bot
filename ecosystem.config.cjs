@@ -16,8 +16,8 @@ module.exports = {
     },
     {
       name: 'fishing-bot',
-      script: 'bot.py',
-      interpreter: 'python3',
+      script: './run_bot.sh',
+      interpreter: 'bash',
       instances: 1,
       autorestart: true,
       watch: false,

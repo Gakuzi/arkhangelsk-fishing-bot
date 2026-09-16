@@ -107,6 +107,19 @@ class SQLiteStorage {
     await tryAddCol('users', 'fuel_consumption', 'REAL');
     await tryAddCol('users', 'tank_capacity', 'REAL');
 
+    // Clean up any old external stock avatars from past templates
+    try {
+      await this.run(`
+        UPDATE users 
+        SET avatar_url = '' 
+        WHERE avatar_url LIKE '%unsplash%' 
+           OR avatar_url LIKE '%randomuser%' 
+           OR avatar_url LIKE '%placeholder%'
+           OR avatar_url LIKE '%pravatar%'
+           OR avatar_url LIKE '%images.%'
+      `);
+    } catch {}
+
     // Gear (Personal fishing tackle)
     await this.run(`
       CREATE TABLE IF NOT EXISTS user_gear (
@@ -284,6 +297,10 @@ class SQLiteStorage {
     }
 
     const fullName = [data.firstName, data.lastName].filter(Boolean).join(' ').trim() || (cleanUsername ? `@${cleanUsername}` : 'Рыбак');
+    let resolvedAvatarUrl = data.photoUrl || '';
+    if (!resolvedAvatarUrl && /^\d+$/.test(cleanNumericId)) {
+      resolvedAvatarUrl = `/api/telegram-avatar/${cleanNumericId}`;
+    }
 
     if (!existing) {
       const newUser: UserProfile = {
@@ -296,7 +313,7 @@ class SQLiteStorage {
         boatType: 'Без техники',
         homeDistrict: 'Архангельск',
         bio: 'Поморский рыбак',
-        avatarUrl: data.photoUrl || '',
+        avatarUrl: resolvedAvatarUrl,
         transportName: 'Нива 4x4 / УАЗ',
         totalSeats: 4,
         availableSeats: 3,
@@ -313,7 +330,12 @@ class SQLiteStorage {
     const updates: Partial<UserProfile> = {};
     if (data.photoUrl && data.photoUrl !== existing.avatarUrl) {
       updates.avatarUrl = data.photoUrl;
+    } else if (!existing.avatarUrl && /^\d+$/.test(cleanNumericId)) {
+      updates.avatarUrl = `/api/telegram-avatar/${cleanNumericId}`;
+    } else if (existing.avatarUrl && (existing.avatarUrl.includes('unsplash') || existing.avatarUrl.includes('randomuser') || existing.avatarUrl.includes('images.'))) {
+      updates.avatarUrl = resolvedAvatarUrl;
     }
+
     if (cleanUsername && (!existing.telegramUsername || existing.telegramUsername !== cleanUsername)) {
       updates.telegramUsername = cleanUsername;
     }
