@@ -19,7 +19,11 @@ npm install --no-audit --prefer-offline 2>/dev/null || npm install
 # 3. Install Python dependencies if needed
 if [ -f requirements.txt ]; then
   echo "🐍 Checking Python dependencies..."
-  pip3 install -r requirements.txt --quiet 2>/dev/null || pip install -r requirements.txt --quiet 2>/dev/null || true
+  if [ -d "venv" ] && [ -f "venv/bin/pip" ]; then
+    ./venv/bin/pip install -r requirements.txt --quiet || true
+  elif command -v pip3 &> /dev/null; then
+    pip3 install -r requirements.txt --quiet 2>/dev/null || pip install -r requirements.txt --quiet 2>/dev/null || true
+  fi
 fi
 
 # 4. Build production WebApp assets

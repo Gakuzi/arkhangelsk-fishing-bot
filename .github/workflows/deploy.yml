@@ -50,13 +50,17 @@ jobs:
           password: ${{ secrets.SERVER_PASSWORD }}
           port: ${{ secrets.SERVER_PORT || 22 }}
           script: |
+            export PATH=$PATH:/usr/local/bin:/usr/bin:/bin
             echo "Searching for project directory on server..."
-            TARGET_DIR=$(find /root /var/www /home -name "bot.py" 2>/dev/null | head -n 1 | xargs -r dirname)
-            if [ -n "$TARGET_DIR" ] && [ -d "$TARGET_DIR" ]; then
-              echo "Found project at $TARGET_DIR"
-              cd "$TARGET_DIR"
+            if [ -d "/root/fishing_bot" ]; then
+              cd "/root/fishing_bot"
             elif [ -d "/root/fishing-app" ]; then
               cd "/root/fishing-app"
+            else
+              TARGET_DIR=$(find /root /var/www /home -maxdepth 3 -name "bot.py" 2>/dev/null | head -n 1 | xargs -r dirname)
+              if [ -n "$TARGET_DIR" ] && [ -d "$TARGET_DIR" ]; then
+                cd "$TARGET_DIR"
+              fi
             fi
             echo "Current directory: $(pwd)"
             git pull origin main || git pull || true
