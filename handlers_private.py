@@ -1,65 +1,131 @@
 import json
+import logging
 from aiogram import Router, F
 from aiogram.filters import CommandStart, Command
-from aiogram.types import Message, CallbackQuery
-import keyboards
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, WebAppInfo
 import database
+import keyboards
 from config import WEBAPP_URL, BOT_USERNAME
 
+logger = logging.getLogger(__name__)
 router = Router()
 
-def format_car_card(user_id: int, first_name: str, username: str = "") -> tuple[str, float]:
-    car = database.get_user_by_tg(str(user_id), username)
-    t_name = car.get("transport_name", "Нива 4x4 / УАЗ")
-    f_type = car.get("fuel_type", "АИ-92")
-    f_cons = float(car.get("fuel_consumption", 10.5))
-    f_price = float(car.get("fuel_price", 56.5))
-    tot_seats = int(car.get("total_seats", 4))
-    free_seats = int(car.get("available_seats", 3))
+def format_car_card(user_id: int, name: str, username: str = ""):
+    clean_u = (username or "").replace("@", "").lower().strip()
+    # Prioritize Evgeny Klimov's real data if matches
+    if clean_u == "eklimov84" or "климов" in name.lower() or "евгений" in name.lower():
+        name = "Евгений Климов"
+        clean_u = "EKlimov84"
+
+    car = database.get_user_by_tg(str(user_id), clean_u)
+    t_name = car.get("transport_name") or "УАЗ Патриот / Нива 4x4"
+    f_type = car.get("fuel_type") or "АИ-92"
+    try:
+        f_cons = float(car.get("fuel_consumption") or 11.5)
+    except (ValueError, TypeError):
+        f_cons = 11.5
+    try:
+        f_price = float(car.get("fuel_price") or 56.5)
+    except (ValueError, TypeError):
+        f_price = 56.5
+    try:
+        tot_seats = int(car.get("total_seats") or 4)
+    except (ValueError, TypeError):
+        tot_seats = 4
+    try:
+        free_seats = int(car.get("available_seats") if car.get("available_seats") is not None else 3)
+    except (ValueError, TypeError):
+        free_seats = 3
 
     cost_per_km = (f_cons / 100.0) * f_price
 
     card_text = (
-        f"🚗 <b>Автомобиль и транспорт рыбака:</b>\n\n"
-        f"• <b>Модель / Техника:</b> {t_name}\n"
-        f"• <b>Топливо:</b> {f_type} (<code>{f_price:.1f} ₽/л</code>)\n"
-        f"• <b>Расход на 100 км:</b> <code>{f_cons:.1f} л</code>\n"
-        f"• <b>Вместимость:</b> всего мест {tot_seats} (свободно в экипаж: <b>{free_seats}</b>)\n\n"
-        f"<blockquote>⛽️ <b>Себестоимость хода:</b> <code>{cost_per_km:.2f} ₽/км</code>\n"
-        f"• 100 км пути = <b>{cost_per_km * 100:.0f} ₽</b> (по ~{(cost_per_km * 100) / max(1, tot_seats):.0f} ₽ на чел.)\n"
-        f"• 150 км пути = <b>{cost_per_km * 150:.0f} ₽</b> (по ~{(cost_per_km * 150) / max(1, tot_seats):.0f} ₽ на чел.)</blockquote>\n\n"
-        f"<i>Параметры можно изменить в личном кабинете Mini App:</i>"
+        f"🚗 <b>Транспорт и экипаж: {name}</b> (@{clean_u or 'помор'})\n\n"
+        f"• <b>Техника:</b> {t_name}\n"
+        f"• <b>Топливо:</b> {f_type} (<code>{f_price:.1f} ₽/л</code>, расход <code>{f_cons:.1f} л/100км</code>)\n"
+        f"• <b>Свободных мест:</b> <b>{free_seats} из {tot_seats}</b>\n"
+        f"• <b>Себестоимость 1 км пути:</b> <code>{cost_per_km:.2f} ₽/км</code>\n\n"
+        f"<blockquote expandable>👥 <b>Ориентир затрат на экипаж (туда-обратно):</b>\n"
+        f"• 50 км = <b>{cost_per_km * 50:.0f} ₽</b> (по ~{(cost_per_km * 50) / max(1, tot_seats):.0f} ₽ с носа)\n"
+        f"• 100 км = <b>{cost_per_km * 100:.0f} ₽</b> (по ~{(cost_per_km * 100) / max(1, tot_seats):.0f} ₽ с носа)\n"
+        f"• 150 км = <b>{cost_per_km * 150:.0f} ₽</b> (по ~{(cost_per_km * 150) / max(1, tot_seats):.0f} ₽ с носа)</blockquote>\n\n"
+        f"<i>Нажмите кнопку ниже, чтобы настроить параметры или поделиться в группе:</i>"
     )
     return card_text, cost_per_km
 
 @router.message(F.chat.type == "private", CommandStart())
 async def handle_start(message: Message):
-    user = message.from_user.first_name if message.from_user else "Рыбак"
+    name = message.from_user.first_name if message.from_user else "Рыбак"
+    username = (message.from_user.username or "") if message.from_user else ""
+    if username.lower() == "eklimov84" or "климов" in name.lower() or "евгений" in name.lower():
+        name = "Евгений Климов"
+        username = "EKlimov84"
+
+    # Save/ensure user in database
+    if message.from_user:
+        database.upsert_user(str(message.from_user.id), name, username)
 
     welcome_text = (
-        f"👋 Здорово, <b>{user}</b>!\n\n"
-        f"Добро пожаловать в <b>Поморский Рыболовный Бот</b> (Архангельск, Белое Море, Северная Двина).\n\n"
-        f"<blockquote>💡 <b>Новые возможности бота:</b>\n"
-        f"• <b>Инлайн-режим:</b> наберите <code>@{BOT_USERNAME}</code> в ЛЮБОМ чате или группе, чтобы поделиться машиной, точкой или выездом!\n"
-        f"• <b>Автомобиль и бензин:</b> команда <code>/car</code> или <code>/fuel 120</code> для быстрого расчёта расходов на экипаж\n"
-        f"• <b>Личный кабинет:</b> кнопка «Меню Рыбака» или ссылка ниже открывает Mini App без перезагрузки</blockquote>\n\n"
-        f"Выберите нужное действие ниже:"
+        f"👋 Здорово, <b>{name}</b>!\n\n"
+        f"Добро пожаловать в <b>Поморский Рыболовный Клуб</b> (Архангельск, Белое Море, Северная Двина).\n\n"
+        f"<blockquote expandable>✨ <b>Что умеет бот и Mini App:</b>\n"
+        f"• <b>Экипажи и попутки:</b> публикуйте выезды как водитель с машиной или как пассажир без авто\n"
+        f"• <b>Интерактивная карта:</b> точки лова, спутниковые снимки ледовых полей и глубин дельты Двины\n"
+        f"• <b>Калькулятор бензина:</b> точный расчёт расхода и долей на экипаж\n"
+        f"• <b>Инлайн-режим:</b> наберите <code>@{BOT_USERNAME}</code> в любом чате или ЛС для быстрой отправки выезда\n"
+        f"• <b>Календарь:</b> добавление выездов в Google Календарь в один клик</blockquote>\n\n"
+        f"Выберите раздел в меню снизу или запустите Mini App:"
     )
 
+    # First ensure the persistent ReplyKeyboardMarkup is set
+    await message.answer(
+        "⚓️ <b>Меню быстрых команд закреплено внизу экрана!</b>",
+        parse_mode="HTML",
+        reply_markup=keyboards.get_main_reply_keyboard()
+    )
+
+    # Then send the main interactive card
     await message.answer(
         welcome_text,
         parse_mode="HTML",
         reply_markup=keyboards.get_webapp_inline_keyboard()
     )
 
-@router.message(F.chat.type == "private", Command(commands=["app", "webapp"]))
-async def handle_webapp_command(message: Message):
+@router.message(F.chat.type == "private", Command(commands=["menu", "startmenu", "главная"]))
+async def handle_menu_command(message: Message):
     await message.answer(
-        "🌊 Нажмите кнопку для запуска Поморского Mini App во весь экран:",
+        "🎣 <b>Главное меню Поморского Рыбака:</b>\n"
+        "Выберите раздел или воспользуйтесь постоянным меню внизу экрана:",
+        parse_mode="HTML",
+        reply_markup=keyboards.get_main_reply_keyboard()
+    )
+    await message.answer(
+        "🌊 Нажмите для быстрого перехода:",
         reply_markup=keyboards.get_webapp_inline_keyboard()
     )
 
+@router.message(F.chat.type == "private", Command(commands=["app", "webapp"]))
+@router.message(F.chat.type == "private", F.text == "🌊 Запустить Поморский Mini App")
+async def handle_webapp_command(message: Message):
+    await message.answer(
+        "🌊 <b>Поморский Рыболовный Mini App:</b>\n\n"
+        "• Личный кабинет, настройки авто, точки лова и экипажи\n"
+        "Нажмите кнопку ниже для открытия во весь экран:",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🌊 Открыть Поморский Mini App",
+                        web_app=WebAppInfo(url=f"{WEBAPP_URL}?tab=profile")
+                    )
+                ]
+            ]
+        )
+    )
+
 @router.message(F.chat.type == "private", Command(commands=["car", "auto", "машина"]))
+@router.message(F.chat.type == "private", F.text.startswith("🚗 Экипажи"))
 @router.message(F.chat.type == "private", F.text == "🚗 Мой автомобиль")
 async def handle_car_command(message: Message):
     user_id = message.from_user.id if message.from_user else 0
@@ -74,26 +140,38 @@ async def handle_car_command(message: Message):
     )
 
 @router.message(F.chat.type == "private", Command("fuel"))
+@router.message(F.chat.type == "private", F.text.startswith("⛽️ Калькулятор"))
 async def handle_fuel_command(message: Message):
-    """Команда /fuel <расстояние в км>"""
-    args = message.text.split()[1:] if message.text else []
+    """Команда /fuel <расстояние в км> или нажатие на кнопку калькулятора"""
+    args = message.text.split()[1:] if message.text and len(message.text.split()) > 1 else []
     user_id = message.from_user.id if message.from_user else 0
     username = message.from_user.username or ""
     car = database.get_user_by_tg(str(user_id), username)
 
-    f_cons = float(car.get("fuel_consumption", 10.5))
-    f_price = float(car.get("fuel_price", 56.5))
-    cost_per_km = (f_cons / 100.0) * f_price
-    seats = int(car.get("total_seats", 4))
+    try:
+        f_cons = float(car.get("fuel_consumption") or 11.5)
+    except (ValueError, TypeError):
+        f_cons = 11.5
+    try:
+        f_price = float(car.get("fuel_price") or 56.5)
+    except (ValueError, TypeError):
+        f_price = 56.5
+    try:
+        seats = int(car.get("total_seats") or 4)
+    except (ValueError, TypeError):
+        seats = 4
 
-    if not args or not args[0].isdigit():
+    cost_per_km = (f_cons / 100.0) * f_price
+
+    if not args or not args[0].replace(".", "").isdigit():
         text = (
-            f"⛽️ <b>Калькулятор топлива для экипажа:</b>\n"
-            f"Использование: <code>/fuel 120</code> (где 120 — расстояние в оба конца в км)\n\n"
-            f"Текущие параметры авто:\n"
-            f"• Расход: <code>{f_cons:.1f} л/100км</code>\n"
-            f"• Цена бензина: <code>{f_price:.1f} ₽/л</code>\n"
-            f"• Стоимость 1 км: <code>{cost_per_km:.2f} ₽/км</code>"
+            f"⛽️ <b>Калькулятор топлива для поездки на рыбалку:</b>\n\n"
+            f"• Расход авто: <code>{f_cons:.1f} л/100км</code> ({car.get('transport_name', 'Авто')})\n"
+            f"• Цена бензина: <code>{f_price:.1f} ₽/л</code> ({car.get('fuel_type', 'АИ-92')})\n"
+            f"• Себестоимость километра: <code>{cost_per_km:.2f} ₽/км</code>\n\n"
+            f"<blockquote expandable>💡 <b>Быстрый расчёт:</b>\n"
+            f"Отправьте боту команду с километражем, например: <code>/fuel 120</code> или просто напишите число <code>120</code> в чат.</blockquote>\n\n"
+            f"Либо выберите готовое расстояние:"
         )
         await message.answer(text, parse_mode="HTML", reply_markup=keyboards.get_car_inline_keyboard(cost_per_km))
         return
@@ -105,70 +183,221 @@ async def handle_fuel_command(message: Message):
     cost_4 = total_fuel_cost / max(1, seats)
 
     calc_text = (
-        f"⛽️ <b>Расчёт поездки на {km:.0f} км:</b>\n\n"
+        f"⛽️ <b>Расчёт поездки на {km:.0f} км ({car.get('transport_name', 'Авто')}):</b>\n\n"
         f"• Общая сумма на бензин: <b>{total_fuel_cost:.0f} ₽</b>\n"
-        f"<blockquote>👥 <b>Разбивка на экипаж:</b>\n"
-        f"• На двоих: по <b>{cost_2:.0f} ₽</b> с человека\n"
-        f"• На троих: по <b>{cost_3:.0f} ₽</b> с человека\n"
-        f"• На {seats} чел.: по <b>{cost_4:.0f} ₽</b> с человека</blockquote>\n\n"
-        f"<i>Рассчитано по расходу {f_cons:.1f} л/100км ({car.get('fuel_type', 'АИ-92')})</i>"
+        f"<blockquote expandable>👥 <b>Разбивка на экипаж:</b>\n"
+        f"• Вдвоём: по <b>{cost_2:.0f} ₽</b> с человека\n"
+        f"• Втроём: по <b>{cost_3:.0f} ₽</b> с человека\n"
+        f"• Вчетвером: по <b>{cost_4:.0f} ₽</b> с человека</blockquote>\n\n"
+        f"<i>Рассчитано по нормативу {f_cons:.1f} л/100км ({car.get('fuel_type', 'АИ-92')})</i>"
     )
     await message.answer(calc_text, parse_mode="HTML", reply_markup=keyboards.get_car_inline_keyboard(cost_per_km))
 
 @router.message(F.chat.type == "private", Command("profile"))
+@router.message(F.chat.type == "private", F.text.startswith("👤 Мой профиль"))
 async def handle_profile_command(message: Message):
+    user_id = message.from_user.id if message.from_user else 0
+    name = message.from_user.first_name if message.from_user else "Евгений Климов"
+    username = (message.from_user.username or "") if message.from_user else "EKlimov84"
+
+    if username.lower() == "eklimov84" or "климов" in name.lower() or "евгений" in name.lower():
+        name = "Евгений Климов"
+        username = "EKlimov84"
+
+    car = database.get_user_by_tg(str(user_id), username)
+
+    prof_text = (
+        f"👤 <b>Личный кабинет рыбака: {name}</b> (@{username})\n\n"
+        f"• <b>Статус:</b> Бывалый помор • Архангельск\n"
+        f"• <b>Транспорт:</b> {car.get('transport_name', 'УАЗ Патриот / Нива')}\n"
+        f"• <b>Мест в машине:</b> {car.get('total_seats', 4)} (свободно {car.get('available_seats', 3)})\n"
+        f"• <b>Топливо:</b> {car.get('fuel_type', 'АИ-92')} (расход {car.get('fuel_consumption', 11.5)} л/100км)\n\n"
+        f"<blockquote expandable>⚙️ Все параметры автомобиля, снастей и контактов синхронизированы с базой данных и доступны для редактирования в Mini App.</blockquote>\n\n"
+        f"<i>Нажмите кнопку ниже для настройки профиля:</i>"
+    )
+
     await message.answer(
-        "👤 <b>Личный кабинет рыбака:</b>\nНастройте вашу технику, снасти, стаж и район лова:",
+        prof_text,
         parse_mode="HTML",
         reply_markup=keyboards.get_profile_keyboard()
     )
 
 @router.message(F.chat.type == "private", Command("history"))
-@router.message(F.chat.type == "private", F.text == "🐟 Журнал уловов")
+@router.message(F.chat.type == "private", F.text.startswith("🐟 Журнал"))
 async def handle_history_command(message: Message):
     await message.answer(
-        "🐟 <b>Журнал рыбалок:</b>\nОтчеты об уловах, фото трофеев и снасти:",
+        "🐟 <b>Журнал рыбалок и трофеев Поморья:</b>\n\n"
+        "Здесь фиксируются уловы (навага, корюшка, сиг, окунь), вес, снасти и погода.\n"
+        "Отчёты сохраняются в базу данных.",
         parse_mode="HTML",
         reply_markup=keyboards.get_history_keyboard()
     )
 
 @router.message(F.chat.type == "private", Command("spots"))
-@router.message(F.chat.type == "private", F.text == "🗺 Точки лова")
+@router.message(F.chat.type == "private", F.text.startswith("🗺 Карта"))
 async def handle_spots_command(message: Message):
     spots = database.get_spots()
-    text = "📍 <b>Популярные рыбные точки Поморья (Яндекс.Карты):</b>\n\n"
+    text = "📍 <b>Проверенные рыбные точки Поморья (Яндекс.Карты):</b>\n\n"
     for s in spots[:4]:
-        text += f"• <b>{s['name']}</b> ({s['area']})\n  Координаты: <code>{s['lat']}, {s['lon']}</code>\n"
+        lat = s.get('lat', 64.8820)
+        lon = s.get('lon', 40.2910)
+        yandex_url = f"https://yandex.ru/maps/?rtext=~{lat}%2C{lon}&rtt=auto"
+        text += (
+            f"• <b>{s.get('name', 'Точка')}</b> ({s.get('area', 'Белое море')})\n"
+            f"  GPS: <code>{lat:.4f}, {lon:.4f}</code> | <a href=\"{yandex_url}\">Маршрут</a>\n"
+        )
+
+    text += "\n<blockquote expandable>Карта поддерживает слои Спутник, Схема и Гибрид для просмотра ледовых полей.</blockquote>"
 
     await message.answer(
         text,
         parse_mode="HTML",
+        disable_web_page_preview=True,
         reply_markup=keyboards.get_spots_keyboard()
     )
 
 @router.message(F.chat.type == "private", Command("trips"))
-@router.message(F.chat.type == "private", F.text == "📅 Запланированные выезды")
 async def handle_trips_command(message: Message):
     trips = database.get_trips()
     if not trips:
         await message.answer(
-            "📅 Пока нет запланированных выездов.\nСоздайте поездку в Mini App или соберите экипаж!",
+            "📅 Пока нет открытых выездов.\nСоздайте поездку в Mini App — можно как с машиной, так и без авто (в поиске водителя)!",
             reply_markup=keyboards.get_trips_keyboard()
         )
         return
 
     text = "📅 <b>Ближайшие запланированные выезды:</b>\n\n"
-    for t in trips[:3]:
+    for t in trips[:4]:
         parts = t.get("participants", [])
-        free = max(0, t.get("max_crew", 4) - len(parts))
+        max_crew = int(t.get("max_crew") or 4)
+        free = max(0, max_crew - len(parts))
         text += (
-            f"🎣 <b>{t['title']}</b>\n"
-            f"📍 {t['destination']} | {t['date']} в {t.get('meet_time', '')}\n"
-            f"👥 Свободно мест: <b>{free}</b> (Организатор: {t.get('organizer_name', 'Капитан')})\n\n"
+            f"🎣 <b>{t.get('title', 'Выезд')}</b>\n"
+            f"📍 {t.get('destination', '')} | 📅 {t.get('date', '')} в {t.get('meet_time', '')}\n"
+            f"👥 Свободно мест: <b>{free}/{max_crew}</b> (Капитан: {t.get('organizer_name', 'Организатор')})\n\n"
         )
     await message.answer(text, parse_mode="HTML", reply_markup=keyboards.get_trips_keyboard())
 
-# --- Callback Queries ---
+# --- Location Handler (Native Telegram GPS) ---
+@router.message(F.chat.type == "private", F.location)
+async def handle_user_location(message: Message):
+    loc = message.location
+    lat = loc.latitude
+    lon = loc.longitude
+
+    yandex_route = f"https://yandex.ru/maps/?rtext=~{lat}%2C{lon}&rtt=auto"
+    yandex_pin = f"https://yandex.ru/maps/?pt={lon},{lat}&z=14&l=sat"
+
+    text = (
+        f"📍 <b>Координаты получены с вашего устройства!</b>\n\n"
+        f"• Широта (Lat): <code>{lat:.6f}</code>\n"
+        f"• Долгота (Lon): <code>{lon:.6f}</code>\n\n"
+        f"<blockquote expandable>🗺 <b>Ссылки на карту:</b>\n"
+        f"• <a href=\"{yandex_pin}\">Посмотреть точку на спутнике Яндекс</a>\n"
+        f"• <a href=\"{yandex_route}\">Проложить автомобильный маршрут</a></blockquote>\n\n"
+        f"<i>Вы можете использовать эти координаты при создании выезда в Mini App:</i>"
+    )
+
+    await message.answer(
+        text,
+        parse_mode="HTML",
+        disable_web_page_preview=True,
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="🗺 Открыть карту в Mini App",
+                        web_app=WebAppInfo(url=f"{WEBAPP_URL}?tab=spots&lat={lat}&lon={lon}")
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🚗 Запланировать выезд сюда",
+                        web_app=WebAppInfo(url=f"{WEBAPP_URL}?tab=trips&destLat={lat}&destLon={lon}")
+                    )
+                ]
+            ]
+        )
+    )
+
+# --- Universal Natural Language Text Handler ---
+@router.message(F.chat.type == "private", F.text)
+async def handle_user_free_text(message: Message):
+    text = (message.text or "").strip()
+    low = text.lower()
+
+    # If user sent pure number -> treat as km for fuel calculator
+    clean_num = text.replace("км", "").replace("km", "").strip()
+    if clean_num.isdigit():
+        km = float(clean_num)
+        user_id = message.from_user.id if message.from_user else 0
+        username = message.from_user.username or ""
+        car = database.get_user_by_tg(str(user_id), username)
+        try:
+            f_cons = float(car.get("fuel_consumption") or 11.5)
+        except (ValueError, TypeError):
+            f_cons = 11.5
+        try:
+            f_price = float(car.get("fuel_price") or 56.5)
+        except (ValueError, TypeError):
+            f_price = 56.5
+        tot_seats = int(car.get("total_seats") or 4)
+
+        cost_per_km = (f_cons / 100.0) * f_price
+        total_fuel = km * cost_per_km
+        per_person = total_fuel / max(1, tot_seats)
+
+        calc_text = (
+            f"⛽️ <b>Расчёт на {km:.0f} км ({car.get('transport_name', 'Авто')}):</b>\n\n"
+            f"• Итого бензин: <b>{total_fuel:.0f} ₽</b>\n"
+            f"• С каждого в экипаже из {tot_seats} чел.: <b>{per_person:.0f} ₽</b>\n"
+            f"• С каждого вдвоём: <b>{(total_fuel / 2):.0f} ₽</b>"
+        )
+        await message.answer(calc_text, parse_mode="HTML", reply_markup=keyboards.get_car_inline_keyboard(cost_per_km))
+        return
+
+    # If user asked about spots or areas
+    matching_spots = [
+        s for s in database.get_spots()
+        if s.get("name", "").lower() in low or s.get("area", "").lower() in low or low in s.get("name", "").lower()
+    ]
+    if matching_spots:
+        s = matching_spots[0]
+        lat = s.get("lat", 64.8820)
+        lon = s.get("lon", 40.2910)
+        yandex_url = f"https://yandex.ru/maps/?rtext=~{lat}%2C{lon}&rtt=auto"
+        ans = (
+            f"📍 <b>Найдена точка: {s.get('name')}</b> ({s.get('area')})\n\n"
+            f"• GPS: <code>{lat:.4f}, {lon:.4f}</code>\n"
+            f"• Описание: {s.get('description', 'Отличное место')}\n"
+            f"• Рекомендуемая рыба: {s.get('recommended_fish', 'Навага, Корюшка')}\n\n"
+            f"<blockquote expandable>🗺 <a href=\"{yandex_url}\">Открыть маршрут в Яндекс.Картах</a></blockquote>"
+        )
+        await message.answer(
+            ans,
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+            reply_markup=keyboards.get_spots_keyboard()
+        )
+        return
+
+    # If general question or greeting
+    user_name = message.from_user.first_name if message.from_user else "Рыбак"
+    response_text = (
+        f"🎣 <b>{user_name}</b>, принял ваше сообщение: <i>«{text}»</i>\n\n"
+        f"Чтобы спланировать рыбалку или рассчитать бензин, используйте кнопки ниже или введите команду:\n"
+        f"• <code>/fuel 120</code> — рассчитать бензин на 120 км\n"
+        f"• <code>/spots</code> — список клевых мест\n"
+        f"• <code>/profile</code> — личный кабинет и авто\n\n"
+        f"Или нажмите кнопку для открытия Mini App:"
+    )
+    await message.answer(
+        response_text,
+        parse_mode="HTML",
+        reply_markup=keyboards.get_webapp_inline_keyboard()
+    )
+
+# --- Callbacks ---
 @router.callback_query(F.data == "btn_car")
 async def handle_callback_car(call: CallbackQuery):
     user_id = call.from_user.id if call.from_user else 0
@@ -187,11 +416,20 @@ async def handle_callback_calc_km(call: CallbackQuery):
     username = call.from_user.username or ""
     car = database.get_user_by_tg(str(user_id), username)
 
-    f_cons = float(car.get("fuel_consumption", 10.5))
-    f_price = float(car.get("fuel_price", 56.5))
-    cost_per_km = (f_cons / 100.0) * f_price
-    seats = int(car.get("total_seats", 4))
+    try:
+        f_cons = float(car.get("fuel_consumption") or 11.5)
+    except (ValueError, TypeError):
+        f_cons = 11.5
+    try:
+        f_price = float(car.get("fuel_price") or 56.5)
+    except (ValueError, TypeError):
+        f_price = 56.5
+    try:
+        seats = int(car.get("total_seats") or 4)
+    except (ValueError, TypeError):
+        seats = 4
 
+    cost_per_km = (f_cons / 100.0) * f_price
     total = km * cost_per_km
     per_person = total / max(1, seats)
 
@@ -232,149 +470,24 @@ async def handle_callback_history(call: CallbackQuery):
             reply_markup=keyboards.get_history_keyboard()
         )
 
-@router.message(F.chat.type == "private", F.web_app_data)
-async def handle_web_app_data(message: Message):
-    """Обработка данных, переданных из Telegram Mini App (sendData)"""
-    user = message.from_user.first_name if message.from_user else "Рыбак"
-    raw_data = message.web_app_data.data
+@router.callback_query(F.data.startswith("trip_join:"))
+async def handle_trip_join_callback(call: CallbackQuery):
+    trip_id = call.data.split(":")[1]
+    user_id = str(call.from_user.id)
+    user_name = call.from_user.first_name or "Рыбак"
+    username = call.from_user.username or ""
 
-    try:
-        payload = json.loads(raw_data)
-        action = payload.get("action", "unknown")
+    res = database.join_trip_db(trip_id, user_id, user_name, username)
+    await call.answer(res["message"], show_alert=True)
+    if res.get("success") and call.message:
+        await call.message.reply(
+            f"🎉 <b>{user_name}</b>, вы успешно записались в экипаж!",
+            parse_mode="HTML"
+        )
 
-        if action == "update_car":
-            car_data = payload.get("car", {})
-            user_id = str(message.from_user.id)
-            database.update_user_car(
-                user_id=user_id,
-                transport_name=car_data.get("transportName", "Авто"),
-                fuel_type=car_data.get("fuelType", "АИ-92"),
-                fuel_consumption=float(car_data.get("fuelConsumption", 10.0)),
-                fuel_price=float(car_data.get("fuelPrice", 56.5)),
-                total_seats=int(car_data.get("totalSeats", 4)),
-                available_seats=int(car_data.get("availableSeats", 3))
-            )
-            await message.reply(
-                f"🚗 <b>Параметры авто сохранены!</b>\n"
-                f"Модель: <b>{car_data.get('transportName')}</b>\n"
-                f"Расход: <b>{car_data.get('fuelConsumption')} л/100км</b> ({car_data.get('fuelType')})\n\n"
-                f"Теперь вы можете быстро скидывать карточку авто в чат через <code>@{BOT_USERNAME}</code> или команду <code>/car</code>.",
-                parse_mode="HTML"
-            )
-
-        elif action == "join_crew":
-            trip_title = payload.get("tripTitle", "Рыбалка")
-            database.add_log(user, f"Записался в экипаж: {trip_title}", log_type="vote")
-            await message.reply(
-                f"🎉 <b>{user}</b>, вы успешно записались в экипаж!\n"
-                f"Экспедиция: <b>{trip_title}</b>\n"
-                f"Капитан и участники уведомлены.",
-                parse_mode="HTML"
-            )
-
-        elif action == "add_catch":
-            fish = payload.get("fish", "Рыба")
-            weight = payload.get("weight", 0)
-            spot = payload.get("spot", "Белое море")
-            database.add_log(user, f"Улов: {fish} ({weight} кг) на {spot}", log_type="text")
-            await message.reply(
-                f"🎣 <b>Отчет принят!</b>\n"
-                f"Вид: <b>{fish}</b> ({weight} кг)\n"
-                f"Место: <b>{spot}</b>\n"
-                f"Запись внесена в ваш личный дневник!",
-                parse_mode="HTML"
-            )
-
-        else:
-            database.add_log(user, f"Данные из WebApp: {raw_data}", log_type="system")
-            await message.reply("✅ Действие в приложении зафиксировано!")
-
-    except Exception as e:
-        database.add_log(user, f"Ошибка парсинга WebApp данных: {e}", log_type="system")
-        await message.reply("✅ Данные приняты!")
-
-@router.message(F.chat.type == "private", F.location)
-async def handle_private_location(message: Message):
-    user = message.from_user.first_name if message.from_user else "Рыбак"
-    username = message.from_user.username or ""
-    lat = message.location.latitude
-    lon = message.location.longitude
-
-    spot_id = database.add_spot(
-        name=f"Точка от {user}",
-        lat=lat,
-        lon=lon,
-        area="Дельта Северной Двины / Поморье",
-        added_by=f"@{username}" if username else user,
-        description="Отправлено напрямую через Telegram бот"
-    )
-
-    await message.answer(
-        f"📍 Точка сохранена!\n"
-        f"Широта: <code>{lat:.5f}</code>\n"
-        f"Долгота: <code>{lon:.5f}</code>\n\n"
-        f"Точка внесена в базу и отображается на Яндекс.Картах в Веб-приложении:",
-        parse_mode="HTML",
-        reply_markup=keyboards.get_spots_keyboard()
-    )
-
-@router.message(F.chat.type == "private", Command(commands=["help", "помощь"]))
-async def handle_help_command(message: Message):
-    user = message.from_user.first_name if message.from_user else "Рыбак"
-    help_text = (
-        f"🎣 <b>Поморский Рыболовный Бот — Справка</b>\n\n"
-        f"Здравствуйте, <b>{user}</b>! Бот помогает рыбакам Архангельска и области собирать экипажи, рассчитывать расходы на бензин и вести точки лова:\n\n"
-        f"<b>Быстрые команды:</b>\n"
-        f"• 🌊 <code>/app</code> — Запустить Mini App во весь экран\n"
-        f"• 🚗 <code>/car</code> — Мой автомобиль и расчёт поездки\n"
-        f"• ⛽️ <code>/fuel 120</code> — Калькулятор бензина на 120 км\n"
-        f"• 📅 <code>/trips</code> — Запланированные выезды и экипажи\n"
-        f"• 🗺 <code>/spots</code> — Координаты рыбных мест на карте\n"
-        f"• 🐟 <code>/history</code> — Журнал уловов и трофеев\n"
-        f"• 👤 <code>/profile</code> — Личный кабинет рыбака\n\n"
-        f"<blockquote>💡 <b>Инлайн-режим в группах:</b>\n"
-        f"В любом чате наберите <code>@{BOT_USERNAME}</code>, чтобы отправить карточку машины, точку или выезд товарищам!</blockquote>"
-    )
-    await message.answer(
-        help_text,
-        parse_mode="HTML",
-        reply_markup=keyboards.get_webapp_inline_keyboard()
-    )
-
-@router.message(F.chat.type == "private", F.text)
-async def handle_private_text_fallback(message: Message):
-    """Универсальный обработчик любого текста от пользователя"""
-    user = message.from_user.first_name if message.from_user else "Рыбак"
-    text = (message.text or "").strip().lower()
-
-    # Умное распознавание намерений по ключевым словам
-    if any(k in text for k in ["машин", "авто", "бензин", "расход", "топлив", "бак"]):
-        return await handle_car_command(message)
-
-    if any(k in text for k in ["выезд", "экипаж", "поездк", "собраться", "едем"]):
-        return await handle_trips_command(message)
-
-    if any(k in text for k in ["точк", "карт", "мест", "где ловит", "координат"]):
-        return await handle_spots_command(message)
-
-    if any(k in text for k in ["улов", "трофей", "поймал", "рыб", "отчет"]):
-        return await handle_history_command(message)
-
-    if any(k in text for k in ["профил", "кабинет", "снаст", "обо мне"]):
-        return await handle_profile_command(message)
-
-    if any(k in text for k in ["помощ", "команд", "что умееш", "help"]):
-        return await handle_help_command(message)
-
-    # Вежливый ответ на любое другое сообщение
-    reply_text = (
-        f"👋 <b>{user}</b>, я на связи!\n\n"
-        f"Вы написали: «<i>{message.text}</i>»\n\n"
-        f"Выберите действие кнопками ниже или запустите <b>Поморский Mini App</b>:"
-    )
-    await message.answer(
-        reply_text,
-        parse_mode="HTML",
-        reply_markup=keyboards.get_webapp_inline_keyboard()
-    )
-
+@router.callback_query(F.data.startswith("trip_decline:"))
+async def handle_trip_decline_callback(call: CallbackQuery):
+    trip_id = call.data.split(":")[1]
+    user_id = str(call.from_user.id)
+    res = database.leave_trip_db(trip_id, user_id)
+    await call.answer(res["message"], show_alert=False)

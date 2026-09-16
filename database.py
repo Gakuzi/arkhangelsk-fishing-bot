@@ -104,9 +104,30 @@ def init_db():
             checklist TEXT,
             notes TEXT,
             participants TEXT,
+            distance_km REAL,
+            fuel_cost_total REAL,
+            cost_per_person REAL,
+            fuel_type TEXT,
+            trip_type TEXT DEFAULT 'driver',
+            has_car INTEGER DEFAULT 1,
+            passenger_seats_needed INTEGER DEFAULT 1,
             created_at TEXT
         )
     """)
+
+    for col, col_type in [
+        ("distance_km", "REAL"),
+        ("fuel_cost_total", "REAL"),
+        ("cost_per_person", "REAL"),
+        ("fuel_type", "TEXT"),
+        ("trip_type", "TEXT DEFAULT 'driver'"),
+        ("has_car", "INTEGER DEFAULT 1"),
+        ("passenger_seats_needed", "INTEGER DEFAULT 1"),
+    ]:
+        try:
+            cursor.execute(f"ALTER TABLE trips ADD COLUMN {col} {col_type}")
+        except Exception:
+            pass
 
     # History (Catches)
     cursor.execute("""

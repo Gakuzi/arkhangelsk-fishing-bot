@@ -183,6 +183,9 @@ class SQLiteStorage {
     await tryAddCol('trips', 'fuel_cost_total', 'REAL');
     await tryAddCol('trips', 'cost_per_person', 'REAL');
     await tryAddCol('trips', 'fuel_type', 'TEXT');
+    await tryAddCol('trips', 'trip_type', "TEXT DEFAULT 'driver'");
+    await tryAddCol('trips', 'has_car', 'INTEGER DEFAULT 1');
+    await tryAddCol('trips', 'passenger_seats_needed', 'INTEGER DEFAULT 1');
 
     // History (catch reports)
     await this.run(`
@@ -594,6 +597,9 @@ class SQLiteStorage {
       fuelCostTotal: r.fuel_cost_total != null ? Number(r.fuel_cost_total) : undefined,
       costPerPerson: r.cost_per_person != null ? Number(r.cost_per_person) : undefined,
       fuelType: r.fuel_type || undefined,
+      tripType: r.trip_type || (r.transport_type && !r.transport_type.toLowerCase().includes('без') ? 'driver' : 'passenger'),
+      hasCar: r.has_car !== null && r.has_car !== undefined ? Boolean(r.has_car) : true,
+      passengerSeatsNeeded: r.passenger_seats_needed || 1,
       createdAt: r.created_at || ''
     }));
   }
@@ -622,6 +628,9 @@ class SQLiteStorage {
       fuelCostTotal: r.fuel_cost_total != null ? Number(r.fuel_cost_total) : undefined,
       costPerPerson: r.cost_per_person != null ? Number(r.cost_per_person) : undefined,
       fuelType: r.fuel_type || undefined,
+      tripType: r.trip_type || (r.transport_type && !r.transport_type.toLowerCase().includes('без') ? 'driver' : 'passenger'),
+      hasCar: r.has_car !== null && r.has_car !== undefined ? Boolean(r.has_car) : true,
+      passengerSeatsNeeded: r.passenger_seats_needed || 1,
       createdAt: r.created_at || ''
     };
   }
@@ -642,9 +651,13 @@ class SQLiteStorage {
       }
     ];
 
+    const tripType = trip.tripType || (trip.hasCar !== false ? 'driver' : 'passenger');
+    const hasCar = trip.hasCar !== undefined ? (trip.hasCar ? 1 : 0) : (tripType === 'driver' ? 1 : 0);
+    const passengerSeatsNeeded = trip.passengerSeatsNeeded || 1;
+
     await this.run(
-      `INSERT INTO trips (id, organizer_id, organizer_name, title, destination, lat, lon, target_fish, date, meet_time, meet_place, transport_type, max_crew, status, checklist, notes, participants, distance_km, fuel_cost_total, cost_per_person, fuel_type, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO trips (id, organizer_id, organizer_name, title, destination, lat, lon, target_fish, date, meet_time, meet_place, transport_type, max_crew, status, checklist, notes, participants, distance_km, fuel_cost_total, cost_per_person, fuel_type, trip_type, has_car, passenger_seats_needed, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         creator.id,
@@ -657,8 +670,8 @@ class SQLiteStorage {
         trip.date,
         trip.meetTime,
         trip.meetPlace,
-        trip.transportType,
-        trip.maxCrew,
+        trip.transportType || (hasCar ? 'Автомобиль' : 'Без машины (ищу водителя)'),
+        trip.maxCrew || 4,
         trip.status || 'Набор открыт',
         JSON.stringify(trip.checklist || []),
         trip.notes || '',
@@ -667,6 +680,9 @@ class SQLiteStorage {
         trip.fuelCostTotal || null,
         trip.costPerPerson || null,
         trip.fuelType || null,
+        tripType,
+        hasCar,
+        passengerSeatsNeeded,
         timeStr
       ].map(v => v === undefined ? null : v)
     );

@@ -80,6 +80,10 @@ export interface PlannedTrip {
   status: 'Набор открыт' | 'Экипаж набран' | 'Выезд завершен' | 'Отменен';
   notes?: string;
   createdAt: string;
+  // Passenger vs Driver flexibility
+  tripType?: 'driver' | 'passenger';
+  hasCar?: boolean;
+  passengerSeatsNeeded?: number;
   // Fuel sharing & route parameters
   distanceKm?: number;
   fuelCostTotal?: number;

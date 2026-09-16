@@ -199,6 +199,60 @@ export const FishingSpotsView: React.FC<FishingSpotsViewProps> = ({
             </div>
 
             <div className="space-y-3">
+              {/* Presets and Geolocation button */}
+              <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] text-slate-300 font-medium">Выбрать точку на карте / GPS:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      hapticFeedback('selection');
+                      if ('geolocation' in navigator) {
+                        navigator.geolocation.getCurrentPosition(
+                          pos => {
+                            setLat(Number(pos.coords.latitude.toFixed(4)));
+                            setLon(Number(pos.coords.longitude.toFixed(4)));
+                            hapticFeedback('success');
+                          },
+                          err => {
+                            console.warn('Geolocation error:', err);
+                          }
+                        );
+                      }
+                    }}
+                    className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-sky-300 text-[11px] font-medium border border-slate-700 transition flex items-center gap-1"
+                  >
+                    <MapPin className="w-3 h-3 text-sky-400" />
+                    <span>Моё местоположение (GPS)</span>
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {[
+                    { name: 'Мудьюг / Сухое Море', lat: 64.8820, lon: 40.2910, area: 'Белое Море' },
+                    { name: 'Никольское устье', lat: 64.5500, lon: 40.4200, area: 'Северная Двина' },
+                    { name: 'Лапоминка', lat: 64.7800, lon: 40.4500, area: 'Дельта Двины' },
+                    { name: 'Маймакса 26 л/з', lat: 64.6500, lon: 40.5200, area: 'Северная Двина' },
+                    { name: 'о. Ягры', lat: 64.5950, lon: 39.8200, area: 'Белое Море' }
+                  ].map((p, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => {
+                        hapticFeedback('selection');
+                        setLat(p.lat);
+                        setLon(p.lon);
+                        setArea(p.area);
+                        if (!name) setName(p.name);
+                      }}
+                      className="px-2 py-0.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] text-slate-300 border border-slate-800 transition"
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div>
                 <label className="block text-[11px] text-slate-400 mb-1">Название точки *</label>
                 <input
