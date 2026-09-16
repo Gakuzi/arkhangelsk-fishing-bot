@@ -1,5 +1,5 @@
 import { config } from './config.ts';
-import { storage } from './storage.ts';
+import { sqliteStorage as storage } from './sqliteStorage.ts';
 
 export class TelegramBotService {
   private isPolling = false;
@@ -112,7 +112,7 @@ export class TelegramBotService {
     const query = (iq.query || '').trim().toLowerCase();
     const userId = String(iq.from?.id || '');
     const firstName = iq.from?.first_name || 'Рыбак';
-    const profile = storage.getUserById(userId);
+    const profile = await storage.getUserById(userId);
 
     const transportName = profile?.transportName || 'Нива 4x4 / УАЗ Патриот';
     const fuelType = profile?.fuelType || 'АИ-92';
@@ -188,7 +188,7 @@ export class TelegramBotService {
     }
 
     // 2. Trips
-    const trips = storage.getTrips();
+    const trips = await storage.getTrips();
     for (const trip of trips.slice(0, 4)) {
       const freeSlots = Math.max(0, trip.maxCrew - (trip.participants?.length || 0));
       results.push({
@@ -219,7 +219,7 @@ export class TelegramBotService {
     }
 
     // 3. Spots
-    const spots = storage.getSpots().slice(0, 3);
+    const spots = (await storage.getSpots()).slice(0, 3);
     for (const spot of spots) {
       results.push({
         type: 'article',
@@ -259,7 +259,7 @@ export class TelegramBotService {
     // Handle Geolocation
     if (msg.location) {
       const { latitude: lat, longitude: lon } = msg.location;
-      storage.addSpot({
+      await storage.addSpot({
         name: `Точка от ${user}`,
         lat,
         lon,
@@ -322,13 +322,13 @@ export class TelegramBotService {
           ]
         }
       });
-      storage.addLog(user, '/start в боте', 'system');
+      await storage.addLog(user, '/start в боте', 'system');
       return;
     }
 
     if (text.startsWith('/car') || text.startsWith('/auto')) {
       const userId = String(msg.from?.id || '');
-      const profile = storage.getUserById(userId);
+      const profile = await storage.getUserById(userId);
       const transportName = profile?.transportName || 'Нива 4x4 / УАЗ Патриот';
       const fuelType = profile?.fuelType || 'АИ-92';
       const fuelPrice = profile?.fuelPricePerLiter || 56.5;
@@ -370,7 +370,7 @@ export class TelegramBotService {
       const parts = text.split(' ');
       const km = parts[1] && !isNaN(Number(parts[1])) ? Number(parts[1]) : 100;
       const userId = String(msg.from?.id || '');
-      const profile = storage.getUserById(userId);
+      const profile = await storage.getUserById(userId);
       const transportName = profile?.transportName || 'Нива 4x4 / УАЗ';
       const fuelConsumption = profile?.fuelConsumptionPer100km || 10.5;
       const fuelPrice = profile?.fuelPricePerLiter || 56.5;
@@ -414,7 +414,7 @@ export class TelegramBotService {
     }
 
     if (text.startsWith('/spots')) {
-      const spots = storage.getSpots().slice(0, 4);
+      const spots = (await storage.getSpots()).slice(0, 4);
       let msgText = '📍 <b>Популярные рыбные точки Поморья:</b>\n\n';
       spots.forEach((s, idx) => {
         msgText += `${idx + 1}. <b>${s.name}</b> (${s.area})\nРыба: ${s.recommendedFish.join(', ')}\nКоординаты: <code>${s.lat}, ${s.lon}</code>\n\n`;
@@ -433,22 +433,89 @@ export class TelegramBotService {
       return;
     }
 
-    // Standard message: Set reaction 👀 and log to doc
-    if (text) {
-      try {
-        await this.callApi('setMessageReaction', {
-          chat_id: chatId,
-          message_id: msg.message_id,
-          reaction: [{ type: 'emoji', emoji: '👀' }]
-        });
-      } catch {}
+    // Handle plain text for distance calc or spots
+    if (text && !text.startsWith('/')) {
+      const cleanNum = text.replace(/км/gi, '').replace(/km/gi, '').trim();
+      if (/^\d+(\.\d+)?$/.test(cleanNum)) {
+        const km = parseFloat(cleanNum);
+        const userId = String(msg.from?.id || '');
+        const profile = await storage.getUserById(userId);
+        const transportName = profile?.transportName || 'Автомобиль';
+        const fuelConsumption = profile?.fuelConsumptionPer100km || 11.5;
+        const fuelPrice = profile?.fuelPricePerLiter || 56.5;
+        const totalSeats = profile?.totalSeats || 4;
+        const costPerKm = (fuelConsumption / 100) * fuelPrice;
+        const totalFuel = km * costPerKm;
 
-      storage.addLog(user, text, 'text');
+        const calcText = 
+          `⛽️ <b>Расчёт на ${km} км (${transportName}):</b>\n\n` +
+          `• Итого бензин: <b>${Math.round(totalFuel)} ₽</b>\n` +
+          `• С каждого в экипаже из ${totalSeats} чел.: <b>${Math.round(totalFuel / Math.max(1, totalSeats))} ₽</b>\n` +
+          `• С каждого вдвоём: <b>${Math.round(totalFuel / 2)} ₽</b>`;
+
+        await this.callApi('sendMessage', {
+          chat_id: chatId,
+          text: calcText,
+          parse_mode: 'HTML',
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '📱 Открыть в Mini App', web_app: { url: `${config.appUrl}?tab=profile` } }]
+            ]
+          }
+        });
+        return;
+      }
+
+      const lowerText = text.toLowerCase();
+      const matchingSpots = (await storage.getSpots()).filter(s => 
+        (s.name && s.name.toLowerCase().includes(lowerText)) || 
+        (s.area && s.area.toLowerCase().includes(lowerText))
+      );
+
+      if (matchingSpots.length > 0) {
+        const s = matchingSpots[0];
+        const yandexUrl = `https://yandex.ru/maps/?rtext=~${s.lat}%2C${s.lon}&rtt=auto`;
+        const ans = 
+          `📍 <b>Найдена точка: ${s.name}</b> (${s.area})\n\n` +
+          `• GPS: <code>${s.lat.toFixed(4)}, ${s.lon.toFixed(4)}</code>\n` +
+          `• Описание: ${s.description || 'Отличное место'}\n` +
+          `• Рекомендуемая рыба: ${s.recommendedFish?.join(', ') || 'Навага, Корюшка'}\n\n` +
+          `<blockquote expandable>🗺 <a href="${yandexUrl}">Открыть маршрут в Яндекс.Картах</a></blockquote>`;
+
+        await this.callApi('sendMessage', {
+          chat_id: chatId,
+          text: ans,
+          parse_mode: 'HTML',
+          disable_web_page_preview: true,
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: '🗺 Все точки на карте', web_app: { url: `${config.appUrl}?tab=spots` } }]
+            ]
+          }
+        });
+        return;
+      }
+
+      // Default response
+      const responseText = 
+        `🎣 <b>${user}</b>, принял ваше сообщение: <i>«${text}»</i>\n\n` +
+        `Чтобы спланировать рыбалку или рассчитать бензин, используйте команды:\n` +
+        `• <code>/fuel 120</code> — рассчитать бензин на 120 км\n` +
+        `• <code>/spots</code> — список клевых мест\n` +
+        `• <code>/profile</code> — личный кабинет и авто\n\n` +
+        `Или нажмите кнопку для открытия Mini App:`;
+
       await this.callApi('sendMessage', {
         chat_id: chatId,
-        text: '<i>✍️ Записано в журнал.\n⏱ Spark проверит переписку через ~30 мин.</i>',
-        parse_mode: 'HTML'
+        text: responseText,
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🌊 Запустить Поморский Mini App', web_app: { url: config.appUrl } }]
+          ]
+        }
       });
+      return;
     }
   }
 
@@ -459,8 +526,45 @@ export class TelegramBotService {
 
     await this.callApi('answerCallbackQuery', { callback_query_id: call.id });
 
+    if (action.startsWith('trip_join:')) {
+      const tripId = action.split(':')[1];
+      const userId = String(call.from?.id || '');
+      const userName = call.from?.first_name || 'Рыбак';
+      const tgUsername = call.from?.username || '';
+      const res = await storage.joinTrip(tripId, {
+        id: userId,
+        name: userName,
+        telegramUsername: tgUsername,
+        role: 'Участник',
+        totalSeats: 1
+      } as any);
+      if (chatId) {
+        await this.callApi('sendMessage', {
+          chat_id: chatId,
+          text: `🎉 <b>${userName}</b>, вы успешно записались в экипаж!\nРезультат: ${res.message}`,
+          parse_mode: 'HTML'
+        });
+      }
+      return;
+    }
+
+    if (action.startsWith('trip_decline:')) {
+      const tripId = action.split(':')[1];
+      const userId = String(call.from?.id || '');
+      const userName = call.from?.first_name || 'Рыбак';
+      await storage.leaveTrip(tripId, userId);
+      if (chatId) {
+        await this.callApi('sendMessage', {
+          chat_id: chatId,
+          text: `🫡 <b>${userName}</b>, вы покинули экипаж.`,
+          parse_mode: 'HTML'
+        });
+      }
+      return;
+    }
+
     if (action === 'btn_spots') {
-      storage.addLog('СИСТЕМА', `${user} запросил меню отправки точки.`, 'system');
+      await storage.addLog('СИСТЕМА', `${user} запросил меню отправки точки.`, 'system');
       await this.callApi('sendMessage', {
         chat_id: chatId,
         text:
@@ -474,7 +578,7 @@ export class TelegramBotService {
         }
       });
     } else if (action === 'btn_trips') {
-      const trips = storage.getTrips();
+      const trips = await storage.getTrips();
       let text = '📅 <b>Запланированные выезды экипажа:</b>\n\n';
       trips.forEach(t => {
         text += `• <b>${t.title}</b>\n  Дата: ${t.date} в ${t.meetTime}\n  Место: ${t.destination}\n  Экипаж: ${t.participants.length}/${t.maxCrew} чел.\n\n`;
@@ -491,7 +595,7 @@ export class TelegramBotService {
       });
     } else if (action === 'vote_yes' || action === 'vote_no') {
       const voteText = action === 'vote_yes' ? 'ИДЕТ' : 'НЕ ИДЕТ';
-      storage.addLog('ГОЛОСОВАНИЕ', `${user} -> ${voteText}`, 'vote');
+      await storage.addLog('ГОЛОСОВАНИЕ', `${user} -> ${voteText}`, 'vote');
       const reply = action === 'vote_yes'
         ? `🔥 <b>${user}</b>, зафиксировано! Вы в экипаже.`
         : `🫡 <b>${user}</b>, отказ зафиксирован.`;
@@ -517,7 +621,7 @@ export class TelegramBotService {
 
     if (payload.messageType === 'callback') {
       if (payload.action === 'btn_spots') {
-        storage.addLog('СИСТЕМА', `${author} запросил меню отправки точки.`, 'system');
+        await storage.addLog('СИСТЕМА', `${author} запросил меню отправки точки.`, 'system');
         return {
           reply: `🗺 <b>${author}</b>, просмотр и отправка координат работает в веб-приложении или через кнопку геолокации.`,
           parse_mode: 'HTML',
@@ -529,7 +633,7 @@ export class TelegramBotService {
       }
 
       if (payload.action === 'btn_trips') {
-        const trips = storage.getTrips();
+        const trips = await storage.getTrips();
         let text = `📅 <b>Запланированные выезды (${trips.length}):</b>\n\n`;
         trips.forEach(t => {
           text += `• <b>${t.title}</b> (${t.destination})\n  Экипаж: ${t.participants.length}/${t.maxCrew} чел.\n`;
@@ -539,7 +643,7 @@ export class TelegramBotService {
 
       if (payload.action === 'vote_yes' || payload.action === 'vote_no') {
         const vote = payload.action === 'vote_yes' ? 'ИДЕТ' : 'НЕ ИДЕТ';
-        storage.addLog('ГОЛОСОВАНИЕ', `${author} -> ${vote}`, 'vote');
+        await storage.addLog('ГОЛОСОВАНИЕ', `${author} -> ${vote}`, 'vote');
         return {
           reply: payload.action === 'vote_yes'
             ? `🔥 <b>${author}</b>, зафиксировано! Вы в экипаже.`
@@ -551,7 +655,7 @@ export class TelegramBotService {
 
     if (payload.messageType === 'location' && payload.location) {
       const { lat, lon, name } = payload.location;
-      storage.addSpot({
+      await storage.addSpot({
         name: name || `Точка от ${author} (${lat.toFixed(4)}, ${lon.toFixed(4)})`,
         lat,
         lon,
@@ -569,7 +673,7 @@ export class TelegramBotService {
     }
 
     if (payload.text) {
-      storage.addLog(author, payload.text, 'text');
+      await storage.addLog(author, payload.text, 'text');
       return {
         reaction: '👀',
         reply: `<i>✍️ Записано в журнал.\n⏱ Spark проверит переписку через ~30 мин.</i>`,
