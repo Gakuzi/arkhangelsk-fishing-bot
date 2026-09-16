@@ -18,7 +18,26 @@ apiRouter.get('/config', (req: Request, res: Response) => {
   });
 });
 
-// Users & Profiles
+// Users & Personal Cabinet
+apiRouter.post('/users/sync-telegram', async (req: Request, res: Response) => {
+  try {
+    const { id, firstName, lastName, username, photoUrl } = req.body;
+    if (!id) {
+      return res.status(400).json({ error: 'Telegram ID is required' });
+    }
+    const profile = await sqliteStorage.syncTelegramUser({
+      telegramId: String(id),
+      firstName: firstName || '',
+      lastName: lastName || '',
+      username: username || '',
+      photoUrl: photoUrl || ''
+    });
+    res.json(profile);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 apiRouter.get('/users', async (req: Request, res: Response) => {
   try {
     const users = await sqliteStorage.getUsers();

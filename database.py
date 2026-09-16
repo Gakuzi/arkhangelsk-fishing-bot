@@ -340,7 +340,13 @@ def upsert_user(user_id: str, name: str, username: str = "", phone: str = ""):
 def get_user_by_tg(user_id: str, username: str = "") -> Dict[str, Any]:
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute("SELECT id, name, telegram_username, boat_type, transport_name, total_seats, available_seats, fuel_type, fuel_price, fuel_consumption, tank_capacity FROM users WHERE id = ? OR (telegram_username != '' AND telegram_username = ?)", (str(user_id), username))
+    clean_u = (username or "").replace("@", "").lower().strip()
+    cursor.execute("""
+        SELECT id, name, telegram_username, boat_type, transport_name, total_seats, available_seats, fuel_type, fuel_price, fuel_consumption, tank_capacity, avatar_url 
+        FROM users 
+        WHERE id = ? OR id = ? OR (telegram_username != '' AND LOWER(telegram_username) = ?)
+        LIMIT 1
+    """, (str(user_id), f"tg-{user_id}", clean_u))
     r = cursor.fetchone()
     conn.close()
     if r:
@@ -355,13 +361,14 @@ def get_user_by_tg(user_id: str, username: str = "") -> Dict[str, Any]:
             "fuel_type": r[7] or "АИ-92",
             "fuel_price": r[8] or 56.5,
             "fuel_consumption": r[9] or 10.5,
-            "tank_capacity": r[10] or 50.0
+            "tank_capacity": r[10] or 50.0,
+            "avatar_url": r[11] or ""
         }
     # Return default car settings if user not found yet
     return {
-        "id": str(user_id),
+        "id": f"tg-{user_id}",
         "name": username or "Поморский Рыбак",
-        "telegram_username": username,
+        "telegram_username": clean_u,
         "boat_type": "УАЗ / Снегоход",
         "transport_name": "Нива 4x4 / УАЗ Патриот",
         "total_seats": 4,
@@ -369,7 +376,8 @@ def get_user_by_tg(user_id: str, username: str = "") -> Dict[str, Any]:
         "fuel_type": "АИ-92",
         "fuel_price": 56.5,
         "fuel_consumption": 10.5,
-        "tank_capacity": 55.0
+        "tank_capacity": 55.0,
+        "avatar_url": ""
     }
 
 def update_user_car(user_id: str, transport_name: str, fuel_type: str, fuel_consumption: float, fuel_price: float, total_seats: int, available_seats: int):

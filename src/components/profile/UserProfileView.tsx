@@ -279,7 +279,12 @@ export const UserProfileView: React.FC<UserProfileViewProps> = ({
           <div className="flex items-center gap-3.5">
             <div className="w-12 h-12 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center font-bold text-lg text-slate-200 shrink-0">
               {user.avatarUrl ? (
-                <img src={user.avatarUrl} alt={user.name} className="w-full h-full object-cover rounded-xl" />
+                <img
+                  src={user.avatarUrl}
+                  alt={user.name}
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover rounded-xl"
+                />
               ) : (
                 user.name[0] || 'Р'
               )}

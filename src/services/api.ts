@@ -16,7 +16,23 @@ export const api = {
     return res.json();
   },
 
-  // Users
+  // Users & Personal Telegram Cabinet
+  async syncTelegramUser(data: {
+    id: number | string;
+    firstName: string;
+    lastName?: string;
+    username?: string;
+    photoUrl?: string;
+  }): Promise<UserProfile> {
+    const res = await fetch('/api/users/sync-telegram', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  },
+
   async getUsers(): Promise<UserProfile[]> {
     const res = await fetch('/api/users');
     return res.json();

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Navbar, ActiveTab } from './components/layout/Navbar.tsx';
 import { PlannedTripsView } from './components/trips/PlannedTripsView.tsx';
 import { FishingHistoryView } from './components/history/FishingHistoryView.tsx';
@@ -25,8 +25,7 @@ import {
 
 export function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('profile');
-  const [users, setUsers] = useState<UserProfile[]>([]);
-  const [activeUser, setActiveUser] = useState<UserProfile | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(null);
   const [trips, setTrips] = useState<PlannedTrip[]>([]);
   const [history, setHistory] = useState<TripHistory[]>([]);
   const [spots, setSpots] = useState<FishingSpot[]>([]);
@@ -34,7 +33,7 @@ export function App() {
   const [botStatus, setBotStatus] = useState<BotStatus | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Initialize Telegram WebApp and read deep link tab
+  // Initialize Telegram WebApp (ready, expand to full screen) & read URL deep-link
   useEffect(() => {
     initTelegramApp();
 
@@ -45,11 +44,30 @@ export function App() {
     }
   }, []);
 
-  const loadAllData = async () => {
+  // Synchronize Personal Telegram Cabinet & Load Data
+  const loadAllData = useCallback(async () => {
     try {
-      const [usersData, tripsData, histData, spotsData, logsData, statusData] =
+      const tgUser = getTelegramUser();
+      let personalProfile: UserProfile | null = null;
+
+      if (tgUser && tgUser.id) {
+        // Authenticated Telegram Mini App: strictly 1 Telegram ID = 1 Personal Cabinet
+        try {
+          personalProfile = await api.syncTelegramUser({
+            id: tgUser.id,
+            firstName: tgUser.first_name,
+            lastName: tgUser.last_name,
+            username: tgUser.username,
+            photoUrl: tgUser.photo_url
+          });
+        } catch (syncErr) {
+          console.error('Failed to sync Telegram profile:', syncErr);
+        }
+      }
+
+      // Fetch all public shared data (trips, spots, reports)
+      const [tripsData, histData, spotsData, logsData, statusData] =
         await Promise.all([
-          api.getUsers().catch(() => []),
           api.getTrips().catch(() => []),
           api.getHistory().catch(() => []),
           api.getSpots().catch(() => []),
@@ -57,63 +75,43 @@ export function App() {
           api.getBotStatus().catch(() => null)
         ]);
 
-      setUsers(usersData);
       setTrips(tripsData);
       setHistory(histData);
       setSpots(spotsData);
       setLogs(logsData);
       if (statusData) setBotStatus(statusData);
 
-      // Auto-detect Telegram User or create fallback
-      const tgUser = getTelegramUser();
-      if (usersData.length > 0) {
-        setActiveUser(prev => {
-          if (tgUser) {
-            const matched = usersData.find(
-              u =>
-                (tgUser.username && u.telegramUsername.toLowerCase() === tgUser.username.toLowerCase()) ||
-                u.id === `tg-${tgUser.id}` ||
-                u.name.toLowerCase().includes(tgUser.first_name.toLowerCase())
-            );
-            if (matched) return matched;
-          }
-          if (prev) {
-            const found = usersData.find(u => u.id === prev.id);
-            if (found) return found;
-          }
-          return usersData[0];
-        });
-      } else {
-        // If users table is empty in DB, initialize with current user info
-        const defaultUser: UserProfile = {
-          id: tgUser ? `tg-${tgUser.id}` : `u-${Date.now()}`,
-          name: tgUser ? `${tgUser.first_name} ${tgUser.last_name || ''}`.trim() : 'Рыбак',
-          telegramUsername: tgUser?.username || '',
-          experienceLevel: 'Любитель',
-          fishingStyles: ['Зимняя со льда', 'Мормышка'],
-          boatType: 'Без техники',
-          homeDistrict: 'Архангельск',
-          createdAt: new Date().toISOString().split('T')[0]
-        };
-        api.updateProfile(defaultUser.id, defaultUser).then(saved => {
-          setActiveUser(saved);
-          setUsers([saved]);
-        }).catch(() => {
-          setActiveUser(defaultUser);
-        });
+      // If user profile is not set yet (or browser outside Telegram)
+      if (personalProfile) {
+        setUser(personalProfile);
+      } else if (!user) {
+        // Browser / Local Dev fallback
+        const existingUsers = await api.getUsers().catch(() => []);
+        if (existingUsers.length > 0) {
+          setUser(existingUsers[0]);
+        } else {
+          const fallbackUser = await api.syncTelegramUser({
+            id: 'default-fisherman',
+            firstName: 'Евгений',
+            lastName: 'Климов',
+            username: 'EKlimov84',
+            photoUrl: ''
+          });
+          setUser(fallbackUser);
+        }
       }
     } catch (err) {
       console.error('Error loading data:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   useEffect(() => {
     loadAllData();
-    const interval = setInterval(loadAllData, 10000);
+    const interval = setInterval(loadAllData, 12000);
     return () => clearInterval(interval);
-  }, []);
+  }, [loadAllData]);
 
   // Synchronize native Telegram BackButton with active tab
   useEffect(() => {
@@ -127,56 +125,38 @@ export function App() {
     }
   }, [activeTab]);
 
-  // Handlers
-  const handleCreateUser = async (name: string, telegramUsername: string) => {
-    const newUser: UserProfile = {
-      id: `u-${Date.now()}`,
-      name,
-      telegramUsername,
-      experienceLevel: 'Любитель',
-      fishingStyles: ['Зимняя со льда'],
-      boatType: 'Без техники',
-      homeDistrict: 'Архангельск',
-      createdAt: new Date().toISOString().split('T')[0]
-    };
+  // Handlers for Personal Cabinet
+  const handleSaveProfile = async (updates: Partial<UserProfile>) => {
+    if (!user) return;
     try {
-      const saved = await api.updateProfile(newUser.id, newUser);
-      setActiveUser(saved);
-      await loadAllData();
+      const updated = await api.updateProfile(user.id, updates);
+      setUser(updated);
       hapticFeedback('success');
     } catch (err) {
-      console.error('Failed to create user:', err);
+      console.error('Failed to save profile:', err);
     }
   };
 
-  const handleSaveProfile = async (updates: Partial<UserProfile>) => {
-    if (!activeUser) return;
-    const updated = await api.updateProfile(activeUser.id, updates);
-    setActiveUser(updated);
-    hapticFeedback('success');
-    await loadAllData();
-  };
-
   const handleJoinTrip = async (tripId: string) => {
-    if (!activeUser) return;
+    if (!user) return;
     const trip = trips.find(t => t.id === tripId);
-    await api.joinTrip(tripId, activeUser.id);
+    await api.joinTrip(tripId, user.id);
     hapticFeedback('success');
     if (isInsideTelegram() && trip) {
       sendDataToBot({
         action: 'join_crew',
         tripId: trip.id,
         tripTitle: trip.title,
-        userId: activeUser.id,
-        userName: activeUser.name
+        userId: user.id,
+        userName: user.name
       });
     }
     await loadAllData();
   };
 
   const handleLeaveTrip = async (tripId: string) => {
-    if (!activeUser) return;
-    await api.leaveTrip(tripId, activeUser.id);
+    if (!user) return;
+    await api.leaveTrip(tripId, user.id);
     hapticFeedback('medium');
     await loadAllData();
   };
@@ -221,26 +201,23 @@ export function App() {
       <Navbar
         activeTab={activeTab}
         onTabChange={setActiveTab}
-        users={users}
-        activeUser={activeUser}
-        onSelectUser={setActiveUser}
-        onCreateUser={handleCreateUser}
+        user={user}
         onRefresh={loadAllData}
-        botStatus={botStatus}
         tripsCount={trips.filter(t => t.status === 'Набор открыт').length}
       />
 
       {/* Main Content with bottom padding for mobile Telegram navigation */}
-      <main className="flex-1 max-w-5xl w-full mx-auto p-3.5 sm:p-6 pb-24 md:pb-8">
-        {loading ? (
-          <div className="flex items-center justify-center h-64 text-xs text-slate-500">
-            Загрузка личного кабинета...
+      <main className="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-6 pb-24 md:pb-8">
+        {loading && !user ? (
+          <div className="flex flex-col items-center justify-center h-64 gap-2 text-xs text-slate-500">
+            <div className="w-6 h-6 border-2 border-slate-700 border-t-sky-400 rounded-full animate-spin" />
+            <span>Синхронизация профиля Telegram...</span>
           </div>
         ) : (
           <>
-            {activeTab === 'profile' && activeUser && (
+            {activeTab === 'profile' && user && (
               <UserProfileView
-                user={activeUser}
+                user={user}
                 onSaveProfile={handleSaveProfile}
                 history={history}
                 trips={trips}
@@ -254,7 +231,7 @@ export function App() {
             {activeTab === 'trips' && (
               <PlannedTripsView
                 trips={trips}
-                activeUser={activeUser}
+                activeUser={user}
                 onJoinTrip={handleJoinTrip}
                 onLeaveTrip={handleLeaveTrip}
                 onCreateTrip={handleCreateTrip}
@@ -264,7 +241,7 @@ export function App() {
             {activeTab === 'history' && (
               <FishingHistoryView
                 history={history}
-                activeUser={activeUser}
+                activeUser={user}
                 onAddHistory={handleAddHistory}
               />
             )}
@@ -272,7 +249,7 @@ export function App() {
             {activeTab === 'spots' && (
               <FishingSpotsView
                 spots={spots}
-                activeUser={activeUser}
+                activeUser={user}
                 onAddSpot={handleAddSpot}
               />
             )}

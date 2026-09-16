@@ -256,6 +256,77 @@ class SQLiteStorage {
     };
   }
 
+  async syncTelegramUser(data: {
+    telegramId: string;
+    firstName: string;
+    lastName: string;
+    username: string;
+    photoUrl: string;
+  }): Promise<UserProfile> {
+    const rawId = String(data.telegramId).trim();
+    const tgId = rawId.startsWith('tg-') ? rawId : `tg-${rawId}`;
+    const cleanNumericId = rawId.replace(/^tg-/, '');
+    const cleanUsername = (data.username || '').replace(/^@/, '').trim();
+
+    // Check if user already exists by tgId or numeric id or username
+    let existing = await this.getUserById(tgId);
+    if (!existing) {
+      existing = await this.getUserById(cleanNumericId);
+    }
+    if (!existing && cleanUsername) {
+      const byUser = await this.get<any>(
+        'SELECT * FROM users WHERE LOWER(telegram_username) = LOWER(?)',
+        [cleanUsername]
+      );
+      if (byUser) {
+        existing = await this.getUserById(byUser.id);
+      }
+    }
+
+    const fullName = [data.firstName, data.lastName].filter(Boolean).join(' ').trim() || (cleanUsername ? `@${cleanUsername}` : 'Рыбак');
+
+    if (!existing) {
+      const newUser: UserProfile = {
+        id: tgId,
+        name: fullName,
+        telegramUsername: cleanUsername,
+        phone: '',
+        experienceLevel: 'Любитель',
+        fishingStyles: ['Зимняя со льда', 'Мормышка'],
+        boatType: 'Без техники',
+        homeDistrict: 'Архангельск',
+        bio: 'Поморский рыбак',
+        avatarUrl: data.photoUrl || '',
+        transportName: 'Нива 4x4 / УАЗ',
+        totalSeats: 4,
+        availableSeats: 3,
+        fuelType: 'АИ-92',
+        fuelPricePerLiter: 58.0,
+        fuelConsumptionPer100km: 11.5,
+        tankCapacityLiters: 55.0,
+        createdAt: new Date().toISOString().split('T')[0]
+      };
+      return await this.updateProfile(tgId, newUser);
+    }
+
+    // User already exists in DB! Update name, username and photoUrl from Telegram if available
+    const updates: Partial<UserProfile> = {};
+    if (data.photoUrl && data.photoUrl !== existing.avatarUrl) {
+      updates.avatarUrl = data.photoUrl;
+    }
+    if (cleanUsername && (!existing.telegramUsername || existing.telegramUsername !== cleanUsername)) {
+      updates.telegramUsername = cleanUsername;
+    }
+    if (fullName && (!existing.name || existing.name === 'Рыбак' || existing.name === 'Поморский Рыбак')) {
+      updates.name = fullName;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      return await this.updateProfile(existing.id, updates);
+    }
+    return existing;
+  }
+
   async updateProfile(id: string, updates: Partial<UserProfile>): Promise<UserProfile> {
     const existing = await this.getUserById(id);
     if (!existing) {
