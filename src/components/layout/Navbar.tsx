@@ -10,7 +10,8 @@ import {
   Plus,
   LogOut,
   UserPlus,
-  Check
+  Check,
+  RotateCw
 } from 'lucide-react';
 import { UserProfile, BotStatus } from '../../types/index.ts';
 import { hapticFeedback, isInsideTelegram, getTelegramUser } from '../../services/telegramWebApp.ts';
@@ -24,6 +25,7 @@ interface NavbarProps {
   activeUser: UserProfile | null;
   onSelectUser: (user: UserProfile) => void;
   onCreateUser?: (name: string, username: string) => void;
+  onRefresh?: () => void;
   botStatus: BotStatus | null;
   tripsCount: number;
 }
@@ -35,6 +37,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeUser,
   onSelectUser,
   onCreateUser,
+  onRefresh,
   botStatus,
   tripsCount
 }) => {
@@ -88,8 +91,19 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             </div>
 
-            {/* Right: User Switcher / Telegram Account */}
-            <div className="flex items-center gap-2 shrink-0">
+            {/* Right: User Switcher & Refresh */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={() => {
+                  hapticFeedback('light');
+                  if (onRefresh) onRefresh();
+                }}
+                title="Обновить данные"
+                className="p-2 rounded-xl bg-slate-900 hover:bg-slate-850 border border-slate-800 text-slate-400 hover:text-slate-200 transition"
+              >
+                <RotateCw className="w-3.5 h-3.5" />
+              </button>
+
               <div className="relative">
                 <button
                   onClick={() => setDropdownOpen(!dropdownOpen)}

@@ -13,6 +13,18 @@ module.exports = {
         NODE_ENV: 'production',
         PORT: 3000
       }
+    },
+    {
+      name: 'fishing-bot',
+      script: 'bot.py',
+      interpreter: 'python3',
+      instances: 1,
+      autorestart: true,
+      watch: false,
+      max_memory_restart: '350M',
+      env: {
+        PYTHONUNBUFFERED: '1'
+      }
     }
   ]
 };

@@ -26,9 +26,31 @@ def init_db():
             bio TEXT,
             fishing_styles TEXT,
             avatar_url TEXT,
+            transport_name TEXT,
+            total_seats INTEGER DEFAULT 4,
+            available_seats INTEGER DEFAULT 3,
+            fuel_type TEXT DEFAULT 'АИ-92',
+            fuel_price REAL DEFAULT 56.5,
+            fuel_consumption REAL DEFAULT 9.5,
+            tank_capacity REAL DEFAULT 55.0,
             created_at TEXT
         )
     """)
+
+    # Try migrations for existing tables
+    for col, col_type in [
+        ("transport_name", "TEXT"),
+        ("total_seats", "INTEGER DEFAULT 4"),
+        ("available_seats", "INTEGER DEFAULT 3"),
+        ("fuel_type", "TEXT DEFAULT 'АИ-92'"),
+        ("fuel_price", "REAL DEFAULT 56.5"),
+        ("fuel_consumption", "REAL DEFAULT 9.5"),
+        ("tank_capacity", "REAL DEFAULT 55.0"),
+    ]:
+        try:
+            cursor.execute(f"ALTER TABLE users ADD COLUMN {col} {col_type}")
+        except Exception:
+            pass
 
     # Spots
     cursor.execute("""
@@ -314,5 +336,61 @@ def upsert_user(user_id: str, name: str, username: str = "", phone: str = ""):
     conn.commit()
     conn.close()
 
+# --- Users & Car Settings ---
+def get_user_by_tg(user_id: str, username: str = "") -> Dict[str, Any]:
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name, telegram_username, boat_type, transport_name, total_seats, available_seats, fuel_type, fuel_price, fuel_consumption, tank_capacity FROM users WHERE id = ? OR (telegram_username != '' AND telegram_username = ?)", (str(user_id), username))
+    r = cursor.fetchone()
+    conn.close()
+    if r:
+        return {
+            "id": r[0],
+            "name": r[1],
+            "telegram_username": r[2],
+            "boat_type": r[3] or "Без техники",
+            "transport_name": r[4] or "Нива 4x4 / УАЗ",
+            "total_seats": r[5] or 4,
+            "available_seats": r[6] if r[6] is not None else 3,
+            "fuel_type": r[7] or "АИ-92",
+            "fuel_price": r[8] or 56.5,
+            "fuel_consumption": r[9] or 10.5,
+            "tank_capacity": r[10] or 50.0
+        }
+    # Return default car settings if user not found yet
+    return {
+        "id": str(user_id),
+        "name": username or "Поморский Рыбак",
+        "telegram_username": username,
+        "boat_type": "УАЗ / Снегоход",
+        "transport_name": "Нива 4x4 / УАЗ Патриот",
+        "total_seats": 4,
+        "available_seats": 3,
+        "fuel_type": "АИ-92",
+        "fuel_price": 56.5,
+        "fuel_consumption": 10.5,
+        "tank_capacity": 55.0
+    }
+
+def update_user_car(user_id: str, transport_name: str, fuel_type: str, fuel_consumption: float, fuel_price: float, total_seats: int, available_seats: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT id FROM users WHERE id = ?", (str(user_id),))
+    if not cursor.fetchone():
+        cursor.execute(
+            """INSERT INTO users (id, name, transport_name, fuel_type, fuel_consumption, fuel_price, total_seats, available_seats, created_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (str(user_id), f"Рыбак {user_id}", transport_name, fuel_type, fuel_consumption, fuel_price, total_seats, available_seats, datetime.now().isoformat())
+        )
+    else:
+        cursor.execute(
+            """UPDATE users SET transport_name = ?, fuel_type = ?, fuel_consumption = ?, fuel_price = ?, total_seats = ?, available_seats = ?
+               WHERE id = ?""",
+            (transport_name, fuel_type, fuel_consumption, fuel_price, total_seats, available_seats, str(user_id))
+        )
+    conn.commit()
+    conn.close()
+
 # Initialize tables
 init_db()
+

@@ -225,6 +225,7 @@ export function App() {
         activeUser={activeUser}
         onSelectUser={setActiveUser}
         onCreateUser={handleCreateUser}
+        onRefresh={loadAllData}
         botStatus={botStatus}
         tripsCount={trips.filter(t => t.status === 'Набор открыт').length}
       />

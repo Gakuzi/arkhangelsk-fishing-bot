@@ -28,6 +28,8 @@ async def setup_bot_ui(bot: Bot):
         commands = [
             BotCommand(command="start", description="Запустить бота и открыть приложение"),
             BotCommand(command="app", description="🌊 Открыть Mini App во весь экран"),
+            BotCommand(command="car", description="🚗 Мой автомобиль и калькулятор бензина"),
+            BotCommand(command="fuel", description="⛽️ Расчёт поездки на экипаж (/fuel 120)"),
             BotCommand(command="trips", description="📅 Запланированные рыбалки и экипаж"),
             BotCommand(command="spots", description="🗺 Карта и координаты точек лова"),
             BotCommand(command="profile", description="👤 Личный кабинет рыбака")

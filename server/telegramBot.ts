@@ -99,11 +99,155 @@ export class TelegramBotService {
   }
 
   public async handleUpdate(update: any) {
-    if (update.message) {
+    if (update.inline_query) {
+      await this.handleInlineQuery(update.inline_query);
+    } else if (update.message) {
       await this.handleIncomingMessage(update.message);
     } else if (update.callback_query) {
       await this.handleIncomingCallback(update.callback_query);
     }
+  }
+
+  private async handleInlineQuery(iq: any) {
+    const query = (iq.query || '').trim().toLowerCase();
+    const userId = String(iq.from?.id || '');
+    const firstName = iq.from?.first_name || 'Рыбак';
+    const profile = storage.getUserById(userId);
+
+    const transportName = profile?.transportName || 'Нива 4x4 / УАЗ Патриот';
+    const fuelType = profile?.fuelType || 'АИ-92';
+    const fuelPrice = profile?.fuelPricePerLiter || 56.5;
+    const fuelConsumption = profile?.fuelConsumptionPer100km || 10.5;
+    const totalSeats = profile?.totalSeats || 4;
+    const availableSeats = profile?.availableSeats !== undefined ? profile.availableSeats : 3;
+    const costPerKm = (fuelConsumption / 100) * fuelPrice;
+
+    const results: any[] = [];
+
+    // 0. Distance number query
+    const numMatch = query.match(/^\d+$/);
+    if (numMatch) {
+      const km = Number(numMatch[0]);
+      const totalFuel = km * costPerKm;
+      const perPerson = totalFuel / Math.max(1, totalSeats);
+      results.push({
+        type: 'article',
+        id: `calc_${km}`,
+        title: `⛽️ Расчёт на ${km} км: ${Math.round(totalFuel)} ₽ (по ${Math.round(perPerson)} ₽/чел)`,
+        description: `Авто: ${transportName} • ${costPerKm.toFixed(2)} ₽/км • ${fuelConsumption} л/100км`,
+        input_message_content: {
+          message_text:
+            `⛽️ <b>Расчёт поездки на ${km} км (${transportName}):</b>\n\n` +
+            `• Расстояние: <b>${km} км</b>\n` +
+            `• Автомобиль: <b>${transportName}</b> (${fuelConsumption} л/100км, ${fuelType})\n` +
+            `• Общая сумма на бензин: <b>${Math.round(totalFuel)} ₽</b>\n\n` +
+            `<blockquote>👥 <b>Разбивка на экипаж:</b>\n` +
+            `• Вдвоём: по <b>${Math.round(totalFuel / 2)} ₽</b> с человека\n` +
+            `• Вчетвером: по <b>${Math.round(perPerson)} ₽</b> с человека</blockquote>`,
+          parse_mode: 'HTML'
+        },
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '📱 Открыть в приложении', web_app: { url: `${config.appUrl}?tab=profile` } }],
+            [{ text: '🚗 Карточка авто', switch_inline_query: 'car' }]
+          ]
+        }
+      });
+    }
+
+    // 1. Car Card
+    if (!query || query.includes('car') || query.includes('авто') || query.includes('машин') || query.includes('бенз')) {
+      results.push({
+        type: 'article',
+        id: `car_${userId}`,
+        title: `🚗 Мой автомобиль: ${transportName} (свободно ${availableSeats} мест)`,
+        description: `Расход ${fuelConsumption} л/100км • ${fuelType} • ${costPerKm.toFixed(2)} ₽/км`,
+        input_message_content: {
+          message_text:
+            `🚗 <b>Экипаж и транспорт: ${firstName}</b>\n\n` +
+            `• <b>Техника:</b> ${transportName}\n` +
+            `• <b>Топливо:</b> ${fuelType} (<code>${fuelPrice.toFixed(1)} ₽/л</code>, расход <code>${fuelConsumption.toFixed(1)} л/100км</code>)\n` +
+            `• <b>Свободных мест:</b> <b>${availableSeats}</b> из ${totalSeats}\n` +
+            `• <b>Себестоимость хода:</b> <code>${costPerKm.toFixed(2)} ₽/км</code>\n\n` +
+            `<blockquote>⛽️ <b>Примерные затраты на бензин:</b>\n` +
+            `• 100 км = <b>${Math.round(costPerKm * 100)} ₽</b> (~${Math.round((costPerKm * 100) / totalSeats)} ₽/чел)\n` +
+            `• 150 км = <b>${Math.round(costPerKm * 150)} ₽</b> (~${Math.round((costPerKm * 150) / totalSeats)} ₽/чел)</blockquote>\n\n` +
+            `<i>Готов взять попутчиков на рыбалку!</i>`,
+          parse_mode: 'HTML'
+        },
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '📱 Открыть профиль в Mini App', web_app: { url: `${config.appUrl}?tab=profile` } }],
+            [
+              { text: '⛽️ Рассчитать км', switch_inline_query_current_chat: '120' },
+              { text: '📅 Собрать выезд', switch_inline_query: 'trips' }
+            ]
+          ]
+        }
+      });
+    }
+
+    // 2. Trips
+    const trips = storage.getTrips();
+    for (const trip of trips.slice(0, 4)) {
+      const freeSlots = Math.max(0, trip.maxCrew - (trip.participants?.length || 0));
+      results.push({
+        type: 'article',
+        id: `trip_${trip.id}`,
+        title: `📅 ${trip.title} (${trip.destination})`,
+        description: `Свободно: ${freeSlots}/${trip.maxCrew} • ${trip.date} в ${trip.meetTime}`,
+        input_message_content: {
+          message_text:
+            `🎣 <b>Рыболовный выезд: ${trip.title}</b>\n\n` +
+            `📍 <b>Место:</b> ${trip.destination}\n` +
+            `📅 <b>Дата и время:</b> ${trip.date} в ${trip.meetTime}\n` +
+            `⛵️ <b>Свободных мест:</b> <b>${freeSlots} из ${trip.maxCrew}</b>\n` +
+            `👤 <b>Организатор:</b> ${trip.organizerName}\n\n` +
+            `<i>Записывайтесь в экипаж:</i>`,
+          parse_mode: 'HTML'
+        },
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '🔥 Записаться в экипаж', callback_data: `trip_join:${trip.id}` },
+              { text: '🫡 Не смогу', callback_data: `trip_decline:${trip.id}` }
+            ],
+            [{ text: '📱 Открыть в WebApp', web_app: { url: `${config.appUrl}?tab=trips` } }]
+          ]
+        }
+      });
+    }
+
+    // 3. Spots
+    const spots = storage.getSpots().slice(0, 3);
+    for (const spot of spots) {
+      results.push({
+        type: 'article',
+        id: `spot_${spot.id}`,
+        title: `📍 ${spot.name} (${spot.area})`,
+        description: `Координаты: ${spot.lat.toFixed(4)}, ${spot.lon.toFixed(4)}`,
+        input_message_content: {
+          message_text:
+            `📍 <b>Рыболовная точка: ${spot.name}</b>\n` +
+            `🌊 <b>Акватория:</b> ${spot.area}\n` +
+            `🧭 <b>Координаты:</b> <code>${spot.lat}, ${spot.lon}</code>\n\n` +
+            `🗺 <a href="https://yandex.ru/maps/?rtext=~${spot.lat}%2C${spot.lon}&rtt=auto">Открыть маршрут в Яндекс.Картах</a>`,
+          parse_mode: 'HTML'
+        },
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '🗺 Открыть на карте в приложении', web_app: { url: `${config.appUrl}?tab=spots` } }]
+          ]
+        }
+      });
+    }
+
+    await this.callApi('answerInlineQuery', {
+      inline_query_id: iq.id,
+      results,
+      cache_time: 2,
+      is_personal: true
+    });
   }
 
   private async handleIncomingMessage(msg: any) {
@@ -179,6 +323,80 @@ export class TelegramBotService {
         }
       });
       storage.addLog(user, '/start в боте', 'system');
+      return;
+    }
+
+    if (text.startsWith('/car') || text.startsWith('/auto')) {
+      const userId = String(msg.from?.id || '');
+      const profile = storage.getUserById(userId);
+      const transportName = profile?.transportName || 'Нива 4x4 / УАЗ Патриот';
+      const fuelType = profile?.fuelType || 'АИ-92';
+      const fuelPrice = profile?.fuelPricePerLiter || 56.5;
+      const fuelConsumption = profile?.fuelConsumptionPer100km || 10.5;
+      const totalSeats = profile?.totalSeats || 4;
+      const availableSeats = profile?.availableSeats !== undefined ? profile.availableSeats : 3;
+      const costPerKm = (fuelConsumption / 100) * fuelPrice;
+
+      const carText =
+        `🚗 <b>Автомобиль и техника рыбака:</b>\n\n` +
+        `• <b>Модель:</b> ${transportName}\n` +
+        `• <b>Топливо:</b> ${fuelType} (<code>${fuelPrice.toFixed(1)} ₽/л</code>, расход <code>${fuelConsumption.toFixed(1)} л/100км</code>)\n` +
+        `• <b>Свободных мест:</b> <b>${availableSeats}</b> из ${totalSeats}\n` +
+        `• <b>Себестоимость:</b> <code>${costPerKm.toFixed(2)} ₽/км</code>\n\n` +
+        `<blockquote>⛽️ <b>Расчёт поездки:</b>\n` +
+        `• 100 км = <b>${Math.round(costPerKm * 100)} ₽</b> (~${Math.round((costPerKm * 100) / totalSeats)} ₽/чел)\n` +
+        `• 150 км = <b>${Math.round(costPerKm * 150)} ₽</b> (~${Math.round((costPerKm * 150) / totalSeats)} ₽/чел)</blockquote>\n\n` +
+        `<i>Настроить авто можно в личном кабинете Mini App:</i>`;
+
+      await this.callApi('sendMessage', {
+        chat_id: chatId,
+        text: carText,
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '⚙️ Настроить в Mini App', web_app: { url: `${config.appUrl}?tab=profile` } }],
+            [
+              { text: '📤 Скинуть авто в чат', switch_inline_query: 'car' },
+              { text: '📅 Собрать выезд', switch_inline_query: 'trips' }
+            ],
+            [{ text: '➕ Добавить бота в группу', url: `https://t.me/${config.botUsername}?startgroup=true` }]
+          ]
+        }
+      });
+      return;
+    }
+
+    if (text.startsWith('/fuel')) {
+      const parts = text.split(' ');
+      const km = parts[1] && !isNaN(Number(parts[1])) ? Number(parts[1]) : 100;
+      const userId = String(msg.from?.id || '');
+      const profile = storage.getUserById(userId);
+      const transportName = profile?.transportName || 'Нива 4x4 / УАЗ';
+      const fuelConsumption = profile?.fuelConsumptionPer100km || 10.5;
+      const fuelPrice = profile?.fuelPricePerLiter || 56.5;
+      const totalSeats = profile?.totalSeats || 4;
+      const costPerKm = (fuelConsumption / 100) * fuelPrice;
+      const totalFuel = km * costPerKm;
+
+      const fuelText =
+        `⛽️ <b>Расчёт топлива на ${km} км (${transportName}):</b>\n\n` +
+        `• Общая стоимость бензина: <b>${Math.round(totalFuel)} ₽</b>\n\n` +
+        `<blockquote>👥 <b>Разбивка на экипаж:</b>\n` +
+        `• Вдвоём: по <b>${Math.round(totalFuel / 2)} ₽</b> с человека\n` +
+        `• Втроём: по <b>${Math.round(totalFuel / 3)} ₽</b> с человека\n` +
+        `• Вчетвером: по <b>${Math.round(totalFuel / Math.max(1, totalSeats))} ₽</b> с человека</blockquote>`;
+
+      await this.callApi('sendMessage', {
+        chat_id: chatId,
+        text: fuelText,
+        parse_mode: 'HTML',
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: '📱 Открыть в Mini App', web_app: { url: `${config.appUrl}?tab=profile` } }],
+            [{ text: '📤 Поделиться в группе', switch_inline_query: `${km}` }]
+          ]
+        }
+      });
       return;
     }
 
