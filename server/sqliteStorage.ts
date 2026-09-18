@@ -2,9 +2,64 @@
 import { DatabaseSync } from 'node:sqlite';
 import path from 'path';
 import fs from 'fs';
-import { UserProfile, FishingSpot, PlannedTrip, TripHistory, LogEntry, SparkCommand, FishingGear } from './storage.ts';
+import { UserProfile, UserTransport, FishingSpot, PlannedTrip, TripHistory, LogEntry, SparkCommand, FishingGear } from './storage.ts';
 
 const DB_FILE = path.join(process.cwd(), 'fishing_bot.db');
+
+const DEFAULT_TRANSPORTS: UserTransport[] = [
+  {
+    id: 'tr-1',
+    name: 'УАЗ Патриот 4x4',
+    type: 'Автомобиль 4х4',
+    seats: 4,
+    fuelType: 'АИ-92',
+    fuelConsumptionPer100km: 12.5,
+    fuelPricePerLiter: 56.5,
+    isDefault: true
+  }
+];
+
+const DEFAULT_INVENTORY = [
+  'Палатка зимняя Куб 2.2x2.2м (3-слойная)',
+  'Ледобур ТОРНАДО 130мм + адаптер под шуруповерт',
+  'Санки-волокуши 120см с отбойником',
+  'Эхолот Практик 6М / 8',
+  'Пешня поморская кованая',
+  'Газовая плитка турист + баллоны',
+  'Термос Арктика 1.8л'
+];
+
+const DEFAULT_RODS = [
+  'Кобылка поморская (наважья, леска 0.25)',
+  'Балалайка Salmo (корюшковая, леска 0.12)',
+  'Зимний удильник с катушкой 60см (на сига)',
+  'Блеснильник судачий углепластик 65см'
+];
+
+const DEFAULT_TACKLES = [
+  'Мормышки фосфорные капельки (светонакопитель)',
+  'Балансир Rapala 5см окуневый (жаба)',
+  'Блесна продольная серебряная на навагу',
+  'Гирлянда на корюшку с 4 фосфорными мормышками',
+  'Флюорокарбон 0.14мм Daiwa'
+];
+
+const DEFAULT_WISHES = [
+  'Выезды преимущественно в выходные дни по утренней воде',
+  'Без курения в салоне автомобиля',
+  'Ищу компанию на Сухое море и Мудьюг',
+  'Готов делить расходы на бензин 50/50'
+];
+
+function safeJsonParse<T>(jsonStr: any, fallback: T): T {
+  if (!jsonStr) return fallback;
+  try {
+    const res = JSON.parse(jsonStr);
+    return (Array.isArray(fallback) ? (Array.isArray(res) && res.length > 0 ? res : fallback) : res) as T;
+  } catch {
+    return fallback;
+  }
+}
 
 class SQLiteStorage {
   private db: any;
@@ -106,6 +161,11 @@ class SQLiteStorage {
     await tryAddCol('users', 'fuel_price', 'REAL');
     await tryAddCol('users', 'fuel_consumption', 'REAL');
     await tryAddCol('users', 'tank_capacity', 'REAL');
+    await tryAddCol('users', 'transports_json', 'TEXT');
+    await tryAddCol('users', 'inventory_json', 'TEXT');
+    await tryAddCol('users', 'rods_json', 'TEXT');
+    await tryAddCol('users', 'tackles_json', 'TEXT');
+    await tryAddCol('users', 'wishes_json', 'TEXT');
 
     // Clean up any old external stock avatars from past templates
     try {
@@ -243,6 +303,11 @@ class SQLiteStorage {
       fuelPricePerLiter: r.fuel_price != null ? Number(r.fuel_price) : 58.0,
       fuelConsumptionPer100km: r.fuel_consumption != null ? Number(r.fuel_consumption) : 12.0,
       tankCapacityLiters: r.tank_capacity != null ? Number(r.tank_capacity) : 60,
+      transports: safeJsonParse(r.transports_json, DEFAULT_TRANSPORTS),
+      inventory: safeJsonParse(r.inventory_json, DEFAULT_INVENTORY),
+      rods: safeJsonParse(r.rods_json, DEFAULT_RODS),
+      tackles: safeJsonParse(r.tackles_json, DEFAULT_TACKLES),
+      wishes: safeJsonParse(r.wishes_json, DEFAULT_WISHES),
       createdAt: r.created_at || ''
     }));
   }
@@ -268,6 +333,11 @@ class SQLiteStorage {
       fuelPricePerLiter: r.fuel_price != null ? Number(r.fuel_price) : 58.0,
       fuelConsumptionPer100km: r.fuel_consumption != null ? Number(r.fuel_consumption) : 12.0,
       tankCapacityLiters: r.tank_capacity != null ? Number(r.tank_capacity) : 60,
+      transports: safeJsonParse(r.transports_json, DEFAULT_TRANSPORTS),
+      inventory: safeJsonParse(r.inventory_json, DEFAULT_INVENTORY),
+      rods: safeJsonParse(r.rods_json, DEFAULT_RODS),
+      tackles: safeJsonParse(r.tackles_json, DEFAULT_TACKLES),
+      wishes: safeJsonParse(r.wishes_json, DEFAULT_WISHES),
       createdAt: r.created_at || ''
     };
   }
@@ -373,12 +443,20 @@ class SQLiteStorage {
         fuelPricePerLiter: updates.fuelPricePerLiter != null ? Number(updates.fuelPricePerLiter) : 58.0,
         fuelConsumptionPer100km: updates.fuelConsumptionPer100km != null ? Number(updates.fuelConsumptionPer100km) : 12.0,
         tankCapacityLiters: updates.tankCapacityLiters != null ? Number(updates.tankCapacityLiters) : 60,
+        transports: updates.transports || DEFAULT_TRANSPORTS,
+        inventory: updates.inventory || DEFAULT_INVENTORY,
+        rods: updates.rods || DEFAULT_RODS,
+        tackles: updates.tackles || DEFAULT_TACKLES,
+        wishes: updates.wishes || DEFAULT_WISHES,
         createdAt: new Date().toISOString().split('T')[0]
       };
 
       await this.run(
-        `INSERT OR REPLACE INTO users (id, name, telegram_username, phone, experience_level, boat_type, home_district, bio, fishing_styles, avatar_url, transport_name, total_seats, available_seats, fuel_type, fuel_price, fuel_consumption, tank_capacity, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT OR REPLACE INTO users (
+          id, name, telegram_username, phone, experience_level, boat_type, home_district, bio,
+          fishing_styles, avatar_url, transport_name, total_seats, available_seats, fuel_type,
+          fuel_price, fuel_consumption, tank_capacity, transports_json, inventory_json, rods_json, tackles_json, wishes_json, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           newUser.id,
           newUser.name,
@@ -397,6 +475,11 @@ class SQLiteStorage {
           newUser.fuelPricePerLiter,
           newUser.fuelConsumptionPer100km,
           newUser.tankCapacityLiters,
+          JSON.stringify(newUser.transports || DEFAULT_TRANSPORTS),
+          JSON.stringify(newUser.inventory || DEFAULT_INVENTORY),
+          JSON.stringify(newUser.rods || DEFAULT_RODS),
+          JSON.stringify(newUser.tackles || DEFAULT_TACKLES),
+          JSON.stringify(newUser.wishes || DEFAULT_WISHES),
           newUser.createdAt
         ]
       );
@@ -421,7 +504,12 @@ class SQLiteStorage {
         fuel_type = ?,
         fuel_price = ?,
         fuel_consumption = ?,
-        tank_capacity = ?
+        tank_capacity = ?,
+        transports_json = ?,
+        inventory_json = ?,
+        rods_json = ?,
+        tackles_json = ?,
+        wishes_json = ?
       WHERE id = ?`,
       [
         merged.name,
@@ -440,6 +528,11 @@ class SQLiteStorage {
         merged.fuelPricePerLiter != null ? Number(merged.fuelPricePerLiter) : null,
         merged.fuelConsumptionPer100km != null ? Number(merged.fuelConsumptionPer100km) : null,
         merged.tankCapacityLiters != null ? Number(merged.tankCapacityLiters) : null,
+        JSON.stringify(merged.transports || DEFAULT_TRANSPORTS),
+        JSON.stringify(merged.inventory || DEFAULT_INVENTORY),
+        JSON.stringify(merged.rods || DEFAULT_RODS),
+        JSON.stringify(merged.tackles || DEFAULT_TACKLES),
+        JSON.stringify(merged.wishes || DEFAULT_WISHES),
         id
       ]
     );

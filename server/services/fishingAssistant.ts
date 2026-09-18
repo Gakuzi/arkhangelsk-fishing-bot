@@ -231,13 +231,19 @@ export async function generateFishingForecast(query: ForecastQuery): Promise<Fis
   "summary": "<2-3 предложения конкретного пояснения для рыбака, почему именно в это время будет клевать, как влияет ветер, давление и прилив>"
 }`;
 
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.8-flash',
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Gemini timeout')), 4000)
+      );
+
+      const aiCallPromise = ai.models.generateContent({
+        model: 'gemini-2.5-flash',
         contents: prompt,
         config: {
           responseMimeType: 'application/json'
         }
       });
+
+      const response: any = await Promise.race([aiCallPromise, timeoutPromise]);
 
       if (response.text) {
         const parsed = JSON.parse(response.text);

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { FishingSpot, UserProfile } from '../../types/index.ts';
 import { hapticFeedback } from '../../services/telegramWebApp.ts';
+import { AddSpotModal } from './AddSpotModal.tsx';
 
 interface FishingSpotsViewProps {
   spots: FishingSpot[];
@@ -35,19 +36,9 @@ export const FishingSpotsView: React.FC<FishingSpotsViewProps> = ({
 }) => {
   const [selectedSpot, setSelectedSpot] = useState<FishingSpot | null>(spots[0] || null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingSpotId, setEditingSpotId] = useState<string | null>(null);
+  const [editingSpot, setEditingSpot] = useState<FishingSpot | null>(null);
   const [mapType, setMapType] = useState<'sat' | 'map'>('sat');
   const [copiedId, setCopiedId] = useState<string | null>(null);
-
-  // Form State
-  const [name, setName] = useState('');
-  const [area, setArea] = useState('Сухое Море / Мудьюг');
-  const [lat, setLat] = useState<number>(64.8820);
-  const [lon, setLon] = useState<number>(40.2910);
-  const [recommendedFish, setRecommendedFish] = useState('Навага, Корюшка');
-  const [depthMeters, setDepthMeters] = useState('4-6');
-  const [description, setDescription] = useState('');
-  const [submitting, setSubmitting] = useState(false);
 
   const active = selectedSpot || spots[0] || {
     id: 'default',
@@ -58,63 +49,15 @@ export const FishingSpotsView: React.FC<FishingSpotsViewProps> = ({
   };
 
   const handleOpenAdd = () => {
-    setEditingSpotId(null);
-    setName('');
-    setArea('Дельта Северной Двины');
-    setLat(64.5500);
-    setLon(40.4200);
-    setRecommendedFish('Навага, Сиг, Корюшка');
-    setDepthMeters('3-5');
-    setDescription('');
+    setEditingSpot(null);
     setIsModalOpen(true);
     hapticFeedback('medium');
   };
 
   const handleOpenEdit = (spot: FishingSpot) => {
-    setEditingSpotId(spot.id);
-    setName(spot.name);
-    setArea(spot.area || 'Белое море');
-    setLat(spot.lat);
-    setLon(spot.lon);
-    setRecommendedFish(spot.recommendedFish?.join(', ') || 'Навага, Корюшка');
-    setDepthMeters(spot.depthMeters || '4-6');
-    setDescription(spot.description || '');
+    setEditingSpot(spot);
     setIsModalOpen(true);
     hapticFeedback('medium');
-  };
-
-  const handleSaveSpot = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim() || !activeUser) return;
-
-    setSubmitting(true);
-    try {
-      const payload = {
-        name: name.trim(),
-        lat: Number(lat),
-        lon: Number(lon),
-        area: area.trim(),
-        recommendedFish: recommendedFish.split(',').map(s => s.trim()).filter(Boolean),
-        season: 'Круглый год',
-        depthMeters,
-        description: description.trim() || 'Рыбное место в Архангельской области',
-        addedBy: activeUser.name
-      };
-
-      if (editingSpotId && onEditSpot) {
-        await onEditSpot(editingSpotId, payload);
-      } else {
-        await onAddSpot(payload);
-      }
-
-      setIsModalOpen(false);
-      setEditingSpotId(null);
-      hapticFeedback('success');
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSubmitting(false);
-    }
   };
 
   const handleCopy = (spot: FishingSpot) => {
@@ -333,136 +276,24 @@ export const FishingSpotsView: React.FC<FishingSpotsViewProps> = ({
       </div>
 
       {/* ADD / EDIT SPOT MODAL */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-md">
-          <div className="liquid-glass-card rounded-3xl max-w-lg w-full max-h-[90vh] flex flex-col border border-white/95 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
-              <div>
-                <h3 className="text-base sm:text-lg font-bold text-slate-800">
-                  {editingSpotId ? 'Редактировать точку' : 'Новая точка лова'}
-                </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  Укажите название, район и координаты для навигатора
-                </p>
-              </div>
-              <button
-                onClick={() => setIsModalOpen(false)}
-                className="p-2 rounded-2xl bg-white/80 hover:bg-white text-slate-400 hover:text-slate-700 border border-slate-200 transition"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveSpot} className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Название точки
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="Например: Остров Мудьюг (южный мыс)"
-                  className="w-full px-3.5 py-2.5 rounded-2xl bg-white border border-slate-200 text-xs focus:ring-2 focus:ring-sky-500"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Район / Водоем
-                </label>
-                <input
-                  type="text"
-                  value={area}
-                  onChange={e => setArea(e.target.value)}
-                  placeholder="Сухое море, Маймакса, Уйма, Никольское..."
-                  className="w-full px-3.5 py-2 rounded-2xl bg-white border border-slate-200 text-xs"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div>
-                  <label className="block text-slate-700 mb-1 font-semibold">Широта (Lat)</label>
-                  <input
-                    type="number"
-                    step="0.0001"
-                    value={lat}
-                    onChange={e => setLat(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-mono"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-700 mb-1 font-semibold">Долгота (Lon)</label>
-                  <input
-                    type="number"
-                    step="0.0001"
-                    value={lon}
-                    onChange={e => setLon(Number(e.target.value))}
-                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-mono"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 text-xs">
-                <div>
-                  <label className="block text-slate-700 mb-1 font-semibold">Какая рыба ловится</label>
-                  <input
-                    type="text"
-                    value={recommendedFish}
-                    onChange={e => setRecommendedFish(e.target.value)}
-                    placeholder="Корюшка, Навага, Сиг"
-                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-700 mb-1 font-semibold">Глубина (м)</label>
-                  <input
-                    type="text"
-                    value={depthMeters}
-                    onChange={e => setDepthMeters(e.target.value)}
-                    placeholder="3-6 м"
-                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Описание подъезда / Особенности
-                </label>
-                <textarea
-                  value={description}
-                  onChange={e => setDescription(e.target.value)}
-                  rows={2}
-                  placeholder="Заезд через Лапоминку, буранник набит, выход на лед надежный..."
-                  className="w-full px-3 py-2 rounded-2xl bg-white border border-slate-200 text-xs focus:ring-2 focus:ring-sky-500"
-                />
-              </div>
-
-              <div className="pt-2 flex items-center justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold transition"
-                >
-                  Отмена
-                </button>
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="px-5 py-2 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white text-xs font-semibold shadow-md shadow-sky-500/20 active:scale-95 transition"
-                >
-                  {submitting ? 'Сохранение...' : editingSpotId ? 'Сохранить изменения' : 'Добавить точку'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <AddSpotModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setEditingSpot(null);
+        }}
+        onSaveSpot={async (spotData) => {
+          if (editingSpot && onEditSpot) {
+            await onEditSpot(editingSpot.id, spotData);
+          } else {
+            await onAddSpot(spotData);
+          }
+        }}
+        editingSpot={editingSpot}
+        activeUser={activeUser}
+        initialLat={active.lat}
+        initialLon={active.lon}
+      />
     </div>
   );
 };

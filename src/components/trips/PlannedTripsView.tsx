@@ -32,6 +32,7 @@ import {
   calculateFuelCost
 } from '../../utils/routeCalculator.ts';
 import { api } from '../../services/api.ts';
+import { AddSpotModal } from '../spots/AddSpotModal.tsx';
 
 interface PlannedTripsViewProps {
   trips: PlannedTrip[];
@@ -104,8 +105,9 @@ export const PlannedTripsView: React.FC<PlannedTripsViewProps> = ({
     lon: spots[0]?.lon || 40.291
   });
 
-  // Interactive Map Picker modal state
+  // Interactive Map Picker & Add Spot Modal states
   const [showMapPicker, setShowMapPicker] = useState(false);
+  const [isAddSpotModalOpen, setIsAddSpotModalOpen] = useState(false);
 
   // AI Assistant Forecast State
   const [loadingForecast, setLoadingForecast] = useState(false);
@@ -130,17 +132,30 @@ export const PlannedTripsView: React.FC<PlannedTripsViewProps> = ({
   const [notes, setNotes] = useState('Выезд по утренней воде по приливу. Термос и санки обязательно.');
   const [submitting, setSubmitting] = useState(false);
 
-  // Initialize transports from profile
+  // Initialize transports and gear from user profile
   useEffect(() => {
-    const list = [
-      activeUser?.transportName || 'УАЗ Патриот 4x4',
-      'Нива Бронто 4x4',
-      'Мотособака Бурлак / Буксировщик',
-      'Снегоход Буран',
-      'Без машины (ищу экипаж / попутку)'
-    ];
+    const list: string[] = [];
+    if (activeUser?.transports && activeUser.transports.length > 0) {
+      activeUser.transports.forEach(tr => {
+        list.push(`${tr.name} (${tr.seats} мест)`);
+      });
+    } else if (activeUser?.transportName) {
+      list.push(`${activeUser.transportName} (${activeUser.availableSeats || 3} мест)`);
+    } else {
+      list.push('УАЗ Патриот 4x4 (4 мест)', 'Нива Бронто 4x4 (3 мест)', 'Мотособака Бурлак (2 мест)');
+    }
+    list.push('Без машины (ищу экипаж / попутку)');
     setUserTransportList(list);
-    setSelectedTransport(activeUser?.transportName || list[0]);
+    setSelectedTransport(list[0]);
+
+    // Pull personal gear from profile
+    const profileGear: string[] = [];
+    if (activeUser?.inventory?.length) profileGear.push(...activeUser.inventory);
+    if (activeUser?.rods?.length) profileGear.push(...activeUser.rods);
+    if (activeUser?.tackles?.length) profileGear.push(...activeUser.tackles);
+    if (profileGear.length > 0) {
+      setSelectedGear(prev => Array.from(new Set([...prev, ...profileGear.slice(0, 6)])));
+    }
   }, [activeUser]);
 
   // Trigger Assistant forecast whenever spot coordinates or date change
@@ -628,6 +643,17 @@ export const PlannedTripsView: React.FC<PlannedTripsViewProps> = ({
                   <div className="flex items-center gap-1.5">
                     <button
                       type="button"
+                      onClick={() => {
+                        setIsAddSpotModalOpen(true);
+                        hapticFeedback('medium');
+                      }}
+                      className="text-[11px] font-semibold text-rose-700 hover:text-rose-900 bg-rose-50 px-2.5 py-1 rounded-xl border border-rose-200 transition flex items-center gap-1"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>Новая точка</span>
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setShowMapPicker(!showMapPicker)}
                       className="text-[11px] font-semibold text-sky-600 hover:text-sky-800 bg-sky-50 px-2.5 py-1 rounded-xl border border-sky-100 transition"
                     >
@@ -647,16 +673,26 @@ export const PlannedTripsView: React.FC<PlannedTripsViewProps> = ({
                 <select
                   value={selectedSpotId}
                   onChange={e => {
+                    if (e.target.value === '__NEW_SPOT__') {
+                      setIsAddSpotModalOpen(true);
+                      hapticFeedback('medium');
+                      return;
+                    }
                     const found = spots.find(s => s.id === e.target.value);
                     if (found) handleSpotSelect(found);
                   }}
                   className="w-full px-3.5 py-2.5 rounded-2xl bg-white border border-slate-200 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-sky-500"
                 >
-                  {spots.map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.area || 'Белое море'})
-                    </option>
-                  ))}
+                  <optgroup label="Сохраненные точки лова">
+                    {spots.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.area || 'Белое море'})
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Новое место">
+                    <option value="__NEW_SPOT__">➕ Отметить новую точку на карте Telegram...</option>
+                  </optgroup>
                 </select>
 
                 {/* Interactive Map Picker iframe if requested */}
@@ -973,6 +1009,28 @@ export const PlannedTripsView: React.FC<PlannedTripsViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* ADD SPOT MODAL (Integrated Telegram Map & Location) */}
+      <AddSpotModal
+        isOpen={isAddSpotModalOpen}
+        onClose={() => setIsAddSpotModalOpen(false)}
+        onSaveSpot={async (spotData) => {
+          if (onAddSpot) {
+            await onAddSpot(spotData);
+          }
+          setIsAddSpotModalOpen(false);
+          const spotName = spotData.name || 'Точка лова';
+          const spotLat = Number(spotData.lat) || 64.882;
+          const spotLon = Number(spotData.lon) || 40.291;
+          setCustomDestination(spotName);
+          setDestCoords({ lat: spotLat, lon: spotLon });
+          fetchAssistantForecast(spotName, spotLat, spotLon, date);
+          hapticFeedback('success');
+        }}
+        activeUser={activeUser}
+        initialLat={destCoords.lat}
+        initialLon={destCoords.lon}
+      />
     </div>
   );
 };

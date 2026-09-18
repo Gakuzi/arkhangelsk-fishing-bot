@@ -242,3 +242,75 @@ export function closeTelegramApp() {
     tg.close();
   }
 }
+
+export interface LocationResult {
+  lat: number;
+  lon: number;
+  accuracy?: number;
+  source: 'telegram_native' | 'browser_gps' | 'fallback';
+}
+
+/**
+ * Request real geolocation using Telegram LocationManager (API 7.0+) or HTML5 Geolocation API
+ */
+export async function requestTelegramLocation(): Promise<LocationResult | null> {
+  const tg = getTelegramWebApp();
+
+  // 1. Check native Telegram LocationManager
+  if (tg?.LocationManager) {
+    try {
+      const locManager = tg.LocationManager;
+      
+      const getPos = () => new Promise<LocationResult | null>((resolve) => {
+        locManager.getLocation((data: any) => {
+          if (data && typeof data.latitude === 'number' && typeof data.longitude === 'number') {
+            resolve({
+              lat: data.latitude,
+              lon: data.longitude,
+              accuracy: data.horizontal_accuracy,
+              source: 'telegram_native'
+            });
+          } else {
+            resolve(null);
+          }
+        });
+      });
+
+      if (!locManager.isInited) {
+        await new Promise<void>((resolve) => {
+          locManager.init(() => resolve());
+        });
+      }
+
+      const tgLoc = await getPos();
+      if (tgLoc) return tgLoc;
+    } catch (err) {
+      console.warn('[TelegramWebApp] LocationManager failed:', err);
+    }
+  }
+
+  // 2. HTML5 browser geolocation fallback
+  if (typeof navigator !== 'undefined' && navigator.geolocation) {
+    try {
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 60000
+        });
+      });
+
+      return {
+        lat: pos.coords.latitude,
+        lon: pos.coords.longitude,
+        accuracy: pos.coords.accuracy,
+        source: 'browser_gps'
+      };
+    } catch (err) {
+      console.warn('[TelegramWebApp] Browser geolocation failed:', err);
+    }
+  }
+
+  return null;
+}
+

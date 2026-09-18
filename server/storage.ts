@@ -1,3 +1,15 @@
+export interface UserTransport {
+  id: string;
+  name: string;
+  type?: 'Автомобиль 4х4' | 'Легковое авто' | 'Снегоход' | 'Мотособака' | 'Лодка / Катер' | 'Другое';
+  seats: number;
+  fuelType?: 'АИ-92' | 'АИ-95' | 'Дизель' | 'Смесь 2Т (бензин+масло)' | 'Газ';
+  fuelConsumptionPer100km?: number;
+  fuelPricePerLiter?: number;
+  notes?: string;
+  isDefault?: boolean;
+}
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -18,6 +30,11 @@ export interface UserProfile {
   fuelPricePerLiter?: number;
   fuelConsumptionPer100km?: number;
   tankCapacityLiters?: number;
+  transports?: UserTransport[];
+  inventory?: string[];
+  rods?: string[];
+  tackles?: string[];
+  wishes?: string[];
 }
 
 export interface FishingGear {
