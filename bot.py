@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher
@@ -49,7 +50,14 @@ async def main():
         )
         return
 
-    bot = Bot(token=TELEGRAM_BOT_TOKEN)
+    proxy = os.getenv("TELEGRAM_PROXY") or os.getenv("HTTPS_PROXY") or os.getenv("HTTP_PROXY")
+    session = None
+    if proxy:
+        from aiogram.client.session.aiohttp import AiohttpSession
+        logger.info(f"Использование прокси для Telegram API: {proxy}")
+        session = AiohttpSession(proxy=proxy)
+
+    bot = Bot(token=TELEGRAM_BOT_TOKEN, session=session)
     dp = Dispatcher()
 
     # Регистрируем роутеры: приватный, групповой и инлайн

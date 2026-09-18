@@ -65,9 +65,9 @@ function createInitialProfile(): UserProfile {
     name: 'Евгений Климов',
     telegramUsername: 'EKlimov84',
     phone: '',
-    experienceLevel: 'Эксперт',
+    experienceLevel: 'Бывалый помор',
     fishingStyles: ['Зимняя со льда', 'Мормышка', 'Троллинг'],
-    boatType: 'Казанка 5М / Мотор 30 л.с.',
+    boatType: 'Катер',
     homeDistrict: 'Архангельск (Соломбала)',
     bio: 'Поморский рыбак. Знаю фарватеры Северной Двины и Сухое море.',
     avatarUrl: '',
@@ -83,7 +83,7 @@ function createInitialProfile(): UserProfile {
 }
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('profile');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('trips');
   const [user, setUser] = useState<UserProfile>(createInitialProfile);
   const [trips, setTrips] = useState<PlannedTrip[]>([]);
   const [history, setHistory] = useState<TripHistory[]>([]);
@@ -320,7 +320,7 @@ export function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-slate-700 selection:text-white">
+    <div className="min-h-screen bg-gradient-to-br from-slate-100 via-sky-50/50 to-blue-50/70 text-slate-800 flex flex-col selection:bg-sky-500 selection:text-white">
       <Navbar
         activeTab={activeTab}
         onTabChange={setActiveTab}
@@ -330,48 +330,39 @@ export function App() {
       />
 
       {/* Main Content with bottom padding for mobile Telegram navigation */}
-      <main className="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-6 pb-24 md:pb-8">
+      <main className="flex-1 max-w-5xl w-full mx-auto p-3 sm:p-6 pb-28 md:pb-8">
         {loading && !user ? (
           <div className="flex flex-col items-center justify-center h-64 gap-2 text-xs text-slate-500">
-            <div className="w-6 h-6 border-2 border-slate-700 border-t-sky-400 rounded-full animate-spin" />
-            <span>Синхронизация профиля Telegram...</span>
+            <div className="w-7 h-7 border-2 border-slate-300 border-t-sky-500 rounded-full animate-spin" />
+            <span className="font-medium">Синхронизация профиля Telegram...</span>
           </div>
         ) : (
           <>
-            {activeTab === 'profile' && (
-              user ? (
-                <UserProfileView
-                  user={user}
-                  onSaveProfile={handleSaveProfile}
-                  history={history}
-                  trips={trips}
-                  spots={spots}
-                  onCreateTrip={handleCreateTrip}
-                  onAddSpot={handleAddSpot}
-                  onAddHistory={handleAddHistory}
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center p-8 bg-slate-900/60 border border-slate-800 rounded-2xl text-center">
-                  <p className="text-slate-300 font-medium mb-2">Профиль загружается...</p>
-                  <button
-                    onClick={loadAllData}
-                    className="px-4 py-2 bg-sky-600 hover:bg-sky-500 rounded-xl text-xs font-semibold text-white transition"
-                  >
-                    Повторить подключение
-                  </button>
-                </div>
-              )
-            )}
-
             {activeTab === 'trips' && (
               <PlannedTripsView
                 trips={trips}
+                spots={spots}
                 activeUser={user}
                 onJoinTrip={handleJoinTrip}
                 onLeaveTrip={handleLeaveTrip}
                 onCreateTrip={handleCreateTrip}
                 onEditTrip={handleEditTrip}
                 onDeleteTrip={handleDeleteTrip}
+                onAddSpot={handleAddSpot}
+              />
+            )}
+
+            {activeTab === 'spots' && (
+              <FishingSpotsView
+                spots={spots}
+                activeUser={user}
+                onAddSpot={handleAddSpot}
+                onEditSpot={handleEditSpot}
+                onDeleteSpot={handleDeleteSpot}
+                onCreateTripWithSpot={(spot) => {
+                  setActiveTab('trips');
+                  hapticFeedback('selection');
+                }}
               />
             )}
 
@@ -385,20 +376,30 @@ export function App() {
               />
             )}
 
-            {activeTab === 'spots' && (
-              <FishingSpotsView
-                spots={spots}
-                activeUser={user}
-                onAddSpot={handleAddSpot}
-                onEditSpot={handleEditSpot}
-                onDeleteSpot={handleDeleteSpot}
-              />
+            {activeTab === 'profile' && (
+              user ? (
+                <UserProfileView
+                  user={user}
+                  onSaveProfile={handleSaveProfile}
+                  onRefresh={loadAllData}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center p-8 liquid-glass-card rounded-3xl text-center">
+                  <p className="text-slate-600 font-medium mb-2">Профиль загружается...</p>
+                  <button
+                    onClick={loadAllData}
+                    className="px-4 py-2 bg-sky-600 hover:bg-sky-500 rounded-2xl text-xs font-semibold text-white shadow-sm transition"
+                  >
+                    Повторить подключение
+                  </button>
+                </div>
+              )
             )}
           </>
         )}
       </main>
 
-      <footer className="hidden md:block border-t border-slate-900 bg-slate-950 py-3.5 px-4 text-center text-[11px] text-slate-400">
+      <footer className="hidden md:block border-t border-slate-200/70 liquid-glass-subtle py-3 px-4 text-center text-xs text-slate-500">
         Поморский Рыбак • Архангельск & Северодвинск • Белое Море & Дельта Северной Двины
       </footer>
     </div>

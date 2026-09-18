@@ -1,84 +1,90 @@
 import React, { useState } from 'react';
 import {
-  Calendar,
+  CalendarDays,
   Clock,
   MapPin,
   Users,
   Plus,
-  Flame,
-  CheckCircle2,
-  XCircle,
-  Truck,
-  CheckSquare,
-  Sparkles,
-  Send,
-  X,
-  Fish,
+  Edit3,
+  Trash2,
   Share2,
   Car,
-  UserCheck,
   Fuel,
   Compass,
-  Download
+  X,
+  Check,
+  ChevronRight,
+  Route,
+  Navigation,
+  AlertCircle
 } from 'lucide-react';
-import { PlannedTrip, UserProfile } from '../../types/index.ts';
-import { openTelegramLink, hapticFeedback } from '../../services/telegramWebApp.ts';
+import { PlannedTrip, UserProfile, FishingSpot } from '../../types/index.ts';
+import { openTelegramLink, hapticFeedback, isInsideTelegram } from '../../services/telegramWebApp.ts';
+import {
+  POPULAR_MEET_POINTS,
+  calculateRoundTripDistanceKm,
+  calculateFuelCost
+} from '../../utils/routeCalculator.ts';
 
 interface PlannedTripsViewProps {
   trips: PlannedTrip[];
+  spots: FishingSpot[];
   activeUser: UserProfile | null;
   onJoinTrip: (tripId: string) => Promise<void>;
   onLeaveTrip: (tripId: string, reason?: string) => Promise<void>;
   onCreateTrip: (trip: any) => Promise<void>;
   onEditTrip?: (tripId: string, trip: any) => Promise<void>;
   onDeleteTrip?: (tripId: string) => Promise<void>;
+  onAddSpot?: (spot: any) => Promise<void>;
 }
-
-// Popular fishing spots in Arkhangelsk region
-const SPOT_PRESETS = [
-  { name: 'Остров Мудьюг / Сухое Море', lat: 64.8820, lon: 40.2910 },
-  { name: 'Никольское устье / Кузнечиха', lat: 64.5500, lon: 40.4200 },
-  { name: 'Пос. Лапоминка (причал)', lat: 64.7800, lon: 40.4500 },
-  { name: 'Маймакса / 26 л/з', lat: 64.6500, lon: 40.5200 },
-  { name: 'Северодвинск / о. Ягры', lat: 64.5950, lon: 39.8200 },
-  { name: 'Уемский затон (Северная Двина)', lat: 64.4400, lon: 40.8500 }
-];
 
 export const PlannedTripsView: React.FC<PlannedTripsViewProps> = ({
   trips,
+  spots,
   activeUser,
   onJoinTrip,
   onLeaveTrip,
   onCreateTrip,
   onEditTrip,
-  onDeleteTrip
+  onDeleteTrip,
+  onAddSpot
 }) => {
   const [filter, setFilter] = useState<'all' | 'driver' | 'passenger' | 'my'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [leaveReasonModal, setLeaveReasonModal] = useState<{tripId: string} | null>(null);
-  const [leaveReason, setLeaveReason] = useState('');
   const [editingTripId, setEditingTripId] = useState<string | null>(null);
 
-  // New Trip Form state
-  const [tripType, setTripType] = useState<'driver' | 'passenger'>('driver');
+  // Modal Form State
   const [title, setTitle] = useState('');
-  const [destination, setDestination] = useState('Остров Мудьюг / Сухое Море');
-  const [destCoords, setDestCoords] = useState<{ lat: number; lon: number } | null>({ lat: 64.8820, lon: 40.2910 });
+  const [tripType, setTripType] = useState<'driver' | 'passenger'>('driver');
   const [date, setDate] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
     return d.toISOString().split('T')[0];
   });
-  const [meetTime, setMeetTime] = useState('06:00');
-  const [meetPlace, setMeetPlace] = useState('Причал в пос. Лапоминка');
-  const [transportType, setTransportType] = useState('УАЗ Патриот / Нива 4x4');
-  const [maxCrew, setMaxCrew] = useState(4);
-  const [passengerSeatsNeeded, setPassengerSeatsNeeded] = useState(1);
-  const [splitFuelCost, setSplitFuelCost] = useState(true);
-  const [hasOwnGear, setHasOwnGear] = useState(true);
-  const [targetFishInput, setTargetFishInput] = useState('Корюшка, Навага, Сиг');
-  const [notes, setNotes] = useState('Выезд по утренней воде по приливу.');
+  const [meetTime, setMeetTime] = useState('06:30');
+  const [meetPlace, setMeetPlace] = useState(POPULAR_MEET_POINTS[0].name);
+  const [selectedSpotId, setSelectedSpotId] = useState<string>(spots[0]?.id || '');
+  const [customDestination, setCustomDestination] = useState(spots[0]?.name || 'Сухое море / о. Мудьюг');
+  const [destCoords, setDestCoords] = useState<{ lat: number; lon: number } | null>(
+    spots[0] ? { lat: spots[0].lat, lon: spots[0].lon } : { lat: 64.882, lon: 40.291 }
+  );
+
+  // Route & Fuel State
+  const [distanceKm, setDistanceKm] = useState<number>(65);
+  const [fuelConsumption, setFuelConsumption] = useState<number>(activeUser?.fuelConsumptionPer100km || 11.5);
+  const [fuelPrice, setFuelPrice] = useState<number>(activeUser?.fuelPricePerLiter || 56.5);
+  const [maxCrew, setMaxCrew] = useState<number>(activeUser?.availableSeats ? activeUser.availableSeats + 1 : 4);
+  const [targetFish, setTargetFish] = useState('Корюшка, Навага, Сиг');
+  const [notes, setNotes] = useState('Выезд по утренней воде по приливу. Термос и санки обязательно.');
   const [submitting, setSubmitting] = useState(false);
+
+  // New Spot Drill-down inside modal
+  const [showAddSpotInline, setShowAddSpotInline] = useState(false);
+  const [newSpotName, setNewSpotName] = useState('');
+  const [newSpotLat, setNewSpotLat] = useState(64.882);
+  const [newSpotLon, setNewSpotLon] = useState(40.291);
+  const [newSpotArea, setNewSpotArea] = useState('Белое море');
+  const [newSpotFish, setNewSpotFish] = useState('Навага, Корюшка');
 
   // Quick Date Helpers
   const setQuickDate = (daysAhead: number) => {
@@ -88,7 +94,7 @@ export const PlannedTripsView: React.FC<PlannedTripsViewProps> = ({
     setDate(d.toISOString().split('T')[0]);
   };
 
-  const setNextWeekend = (dayOfWeek: number) => { // 6 = Saturday, 0 = Sunday
+  const setNextWeekend = (dayOfWeek: number) => {
     hapticFeedback('selection');
     const d = new Date();
     const currentDay = d.getDay();
@@ -98,851 +104,694 @@ export const PlannedTripsView: React.FC<PlannedTripsViewProps> = ({
     setDate(d.toISOString().split('T')[0]);
   };
 
-  const filteredTrips = trips.filter(t => {
-    if (filter === 'driver') return t.tripType === 'driver' || t.hasCar !== false;
-    if (filter === 'passenger') return t.tripType === 'passenger' || t.hasCar === false;
-    if (filter === 'my' && activeUser) {
-      return t.participants.some(p => p.userId === activeUser.id);
+  // Auto-calculate distance when destination or meet place changes
+  const handleSpotSelect = (spot: FishingSpot) => {
+    setSelectedSpotId(spot.id);
+    setCustomDestination(spot.name);
+    setDestCoords({ lat: spot.lat, lon: spot.lon });
+
+    const meetPoint = POPULAR_MEET_POINTS.find(p => p.name === meetPlace) || POPULAR_MEET_POINTS[0];
+    const calcDist = calculateRoundTripDistanceKm(meetPoint.lat, meetPoint.lon, spot.lat, spot.lon);
+    setDistanceKm(calcDist);
+    hapticFeedback('selection');
+  };
+
+  const handleMeetPlaceSelect = (placeName: string) => {
+    setMeetPlace(placeName);
+    const meetPoint = POPULAR_MEET_POINTS.find(p => p.name === placeName) || POPULAR_MEET_POINTS[0];
+    if (destCoords) {
+      const calcDist = calculateRoundTripDistanceKm(meetPoint.lat, meetPoint.lon, destCoords.lat, destCoords.lon);
+      setDistanceKm(calcDist);
     }
-    return true;
-  });
-
-  const handleShareTrip = (trip: PlannedTrip) => {
-    hapticFeedback('light');
-    const isPassenger = trip.tripType === 'passenger' || trip.hasCar === false;
-    const header = isPassenger
-      ? `🚶‍♂️ Ищу экипаж / водителя: "${trip.title}" (${trip.destination})`
-      : `🚗 Собираю экипаж на рыбалку: "${trip.title}" (${trip.destination})`;
-
-    const text = encodeURIComponent(
-      `${header}\n📅 Дата: ${trip.date} в ${trip.meetTime}\n👤 Организатор: ${trip.organizerName}\nМест: ${Math.max(0, trip.maxCrew - trip.participants.length)} из ${trip.maxCrew}`
-    );
-    openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent('https://t.me/ArkhangelskFishingBot')}&text=${text}`);
   };
 
-  const handleAddToCalendar = (trip: PlannedTrip) => {
-    hapticFeedback('light');
-    const cleanDate = trip.date.replace(/-/g, '');
-    const cleanTime = (trip.meetTime || '06:00').replace(':', '') + '00';
-    const startIso = `${cleanDate}T${cleanTime}`;
-
-    // 6 hours duration by default
-    const [h, m] = (trip.meetTime || '06:00').split(':').map(Number);
-    const endH = (h + 6) % 24;
-    const endTime = `${String(endH).padStart(2, '0')}${String(m || 0).padStart(2, '0')}00`;
-    const endIso = `${cleanDate}T${endTime}`;
-
-    const titleStr = encodeURIComponent(`Рыбалка: ${trip.title}`);
-    const detailsStr = encodeURIComponent(
-      `Поморский выезд на рыбалку.\nВодоем: ${trip.destination}\nОрганизатор: ${trip.organizerName}\nТранспорт: ${trip.transportType}\nПримечания: ${trip.notes || 'Без особых пометок'}`
-    );
-    const locationStr = encodeURIComponent(trip.destination);
-
-    const googleCalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${titleStr}&dates=${startIso}/${endIso}&details=${detailsStr}&location=${locationStr}`;
-    openTelegramLink(googleCalUrl);
+  // Open modal for Create
+  const handleOpenCreate = () => {
+    setEditingTripId(null);
+    setTitle('Рыбалка на ' + (spots[0]?.name || 'Сухом море'));
+    setTripType('driver');
+    if (spots.length > 0) {
+      handleSpotSelect(spots[0]);
+    }
+    setIsModalOpen(true);
+    hapticFeedback('medium');
   };
 
-  const handleCreateSubmit = async (e: React.FormEvent) => {
+  // Open modal for Edit
+  const handleOpenEdit = (trip: PlannedTrip) => {
+    setEditingTripId(trip.id);
+    setTitle(trip.title);
+    setTripType(trip.tripType || 'driver');
+    setDate(trip.date);
+    setMeetTime(trip.meetTime);
+    setMeetPlace(trip.meetPlace);
+    setCustomDestination(trip.destination);
+    setDestCoords(trip.coordinates || null);
+    setMaxCrew(trip.maxCrew || 4);
+    setDistanceKm(trip.distanceKm || 60);
+    setNotes(trip.notes || '');
+    setTargetFish(trip.targetFish?.join(', ') || 'Навага, Корюшка');
+    setIsModalOpen(true);
+    hapticFeedback('medium');
+  };
+
+  // Save Inline Spot
+  const handleSaveInlineSpot = async () => {
+    if (!newSpotName.trim()) return;
+    try {
+      const createdSpot = {
+        name: newSpotName.trim(),
+        lat: Number(newSpotLat),
+        lon: Number(newSpotLon),
+        area: newSpotArea,
+        recommendedFish: newSpotFish.split(',').map(s => s.trim()).filter(Boolean),
+        season: 'Круглый год',
+        description: 'Точка добавлена при создании рыбалки'
+      };
+      if (onAddSpot) {
+        await onAddSpot(createdSpot);
+      }
+      setCustomDestination(createdSpot.name);
+      setDestCoords({ lat: createdSpot.lat, lon: createdSpot.lon });
+      setShowAddSpotInline(false);
+      hapticFeedback('success');
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // Submit Trip Form
+  const handleSubmitTrip = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !destination || !activeUser) return;
+    if (!title.trim() || !activeUser) return;
 
     setSubmitting(true);
     try {
-      const targetFish = targetFishInput.split(',').map(s => s.trim()).filter(Boolean);
-      const isPassenger = tripType === 'passenger';
+      const fuelCalc = calculateFuelCost(distanceKm, fuelConsumption, fuelPrice, maxCrew);
 
-      const finalTransport = isPassenger
-        ? 'Без машины (ищу экипаж с авто)'
-        : transportType || 'УАЗ Патриот / Нива';
-
-      const finalMaxCrew = isPassenger
-        ? passengerSeatsNeeded + 2 // Passenger + companion + driver + 1
-        : Number(maxCrew);
-
-      const tripData = {
-        organizerId: activeUser.id,
-        organizerName: activeUser.name,
-        title,
-        destination,
+      const tripPayload = {
+        title: title.trim(),
+        destination: customDestination,
         coordinates: destCoords || undefined,
-        targetFish,
+        targetFish: targetFish.split(',').map(f => f.trim()).filter(Boolean),
         date,
         meetTime,
-        meetPlace: isPassenger ? `Подсяду: ${meetPlace}` : meetPlace,
-        transportType: finalTransport,
-        maxCrew: finalMaxCrew,
+        meetPlace,
+        transportType: tripType === 'driver' ? (activeUser.transportName || 'Автомобиль 4x4') : 'Ищу попутку / экипаж',
+        maxCrew: Number(maxCrew),
         tripType,
-        hasCar: !isPassenger,
-        passengerSeatsNeeded: isPassenger ? passengerSeatsNeeded : undefined,
-        checklist: [
-          'Удочки с мормышками и блеснами',
-          'Наживка (креветка, опарыш)',
-          hasOwnGear ? 'Ледобур и ящик (со своими)' : 'Нужен бур напрокат',
-          splitFuelCost ? 'Готов разделить расходы на бензин' : 'Расходы согласованы',
-          'Термос с горячим чаем'
-        ],
-        status: 'Набор открыт',
-        notes: `${isPassenger ? '🚶‍♂️ Пассажир ищет авто. ' : '🚗 Водитель с авто. '}${notes}`
+        distanceKm: Number(distanceKm),
+        fuelCostTotal: fuelCalc.totalCost,
+        costPerPerson: fuelCalc.costPerPerson,
+        notes: notes.trim(),
+        checklist: ['Удочки и мормышки', 'Наживка (креветка/опарыш)', 'Термос с чаем', 'Сменные рукавицы', 'Санки']
       };
 
       if (editingTripId && onEditTrip) {
-        await onEditTrip(editingTripId, tripData);
+        await onEditTrip(editingTripId, tripPayload);
       } else {
-        await onCreateTrip(tripData);
+        await onCreateTrip({
+          ...tripPayload,
+          organizerId: activeUser.id,
+          organizerName: activeUser.name,
+          participants: [
+            {
+              userId: activeUser.id,
+              userName: activeUser.name,
+              telegramUsername: activeUser.telegramUsername || '',
+              role: 'Организатор',
+              joinedAt: new Date().toISOString()
+            }
+          ],
+          status: 'Набор открыт'
+        });
       }
 
-      setEditingTripId(null);
       setIsModalOpen(false);
-      setTitle('');
+      setEditingTripId(null);
       hapticFeedback('success');
     } catch (err) {
-      console.error('Error creating trip:', err);
+      console.error(err);
     } finally {
       setSubmitting(false);
     }
   };
 
+  // Filter trips
+  const filteredTrips = trips.filter(t => {
+    if (filter === 'driver') return t.tripType === 'driver';
+    if (filter === 'passenger') return t.tripType === 'passenger';
+    if (filter === 'my' && activeUser) {
+      return (
+        t.organizerId === activeUser.id ||
+        t.participants.some(p => p.userId === activeUser.id)
+      );
+    }
+    return true;
+  });
+
+  const fuelPreview = calculateFuelCost(distanceKm, fuelConsumption, fuelPrice, maxCrew);
+
   return (
-    <div className="space-y-5 max-w-5xl mx-auto">
-      {/* Header and Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/90 rounded-2xl border border-slate-800 p-5 shadow-sm">
+    <div className="space-y-6 max-w-5xl mx-auto">
+      {/* Header bar */}
+      <div className="liquid-glass-card rounded-3xl p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-base sm:text-lg font-semibold text-slate-100">Экипажи и Поездки на рыбалку</h2>
-            <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-sky-950 text-sky-300 border border-sky-800/60">
-              Поморье 2026
+            <CalendarDays className="w-6 h-6 text-sky-600" />
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-800 tracking-tight">
+              Рыбалки
+            </h1>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-100 text-sky-800 border border-sky-200">
+              {trips.length} выездов
             </span>
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Объединяйтесь в экипажи: водители с авто берут попутчиков, а рыбаки без машин находят попутку
+          <p className="text-xs sm:text-sm text-slate-500 mt-1 font-medium">
+            Сбор экипажей, совместные поездки и делёжка бензина по Поморью
           </p>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          {/* Filters */}
-          <div className="flex items-center p-1 rounded-xl bg-slate-950 border border-slate-800 text-xs">
-            <button
-              onClick={() => {
-                hapticFeedback('selection');
-                setFilter('all');
-              }}
-              className={`px-3 py-1.5 rounded-lg transition font-medium ${
-                filter === 'all'
-                  ? 'bg-slate-800 text-slate-100'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Все ({trips.length})
-            </button>
-            <button
-              onClick={() => {
-                hapticFeedback('selection');
-                setFilter('driver');
-              }}
-              className={`px-3 py-1.5 rounded-lg transition font-medium flex items-center gap-1.5 ${
-                filter === 'driver'
-                  ? 'bg-slate-800 text-sky-300'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <Car className="w-3.5 h-3.5 text-sky-400" />
-              <span>Есть авто</span>
-            </button>
-            <button
-              onClick={() => {
-                hapticFeedback('selection');
-                setFilter('passenger');
-              }}
-              className={`px-3 py-1.5 rounded-lg transition font-medium flex items-center gap-1.5 ${
-                filter === 'passenger'
-                  ? 'bg-slate-800 text-emerald-300'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Ищут машину</span>
-            </button>
-            <button
-              onClick={() => {
-                hapticFeedback('selection');
-                setFilter('my');
-              }}
-              className={`px-3 py-1.5 rounded-lg transition font-medium ${
-                filter === 'my'
-                  ? 'bg-slate-800 text-slate-100'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Мой экипаж
-            </button>
-          </div>
+        <button
+          onClick={handleOpenCreate}
+          className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-semibold text-sm shadow-md shadow-sky-500/25 active:scale-95 transition"
+        >
+          <Plus className="w-4 h-4" />
+          <span>Создать рыбалку</span>
+        </button>
+      </div>
 
+      {/* Filter Tabs */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+        {[
+          { id: 'all', label: 'Все рыбалки' },
+          { id: 'driver', label: 'Есть места (водители)' },
+          { id: 'passenger', label: 'Ищут экипаж (пассажиры)' },
+          { id: 'my', label: 'Мои выезды' }
+        ].map(tab => (
           <button
+            key={tab.id}
             onClick={() => {
               hapticFeedback('selection');
-              setIsModalOpen(true);
+              setFilter(tab.id as any);
             }}
-            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white border border-sky-500/50 text-xs font-semibold transition shadow-md shadow-sky-950 shrink-0"
+            className={`px-4 py-2 rounded-2xl text-xs font-semibold whitespace-nowrap transition-all border ${
+              filter === tab.id
+                ? 'bg-sky-500 text-white border-sky-500 shadow-sm shadow-sky-500/20'
+                : 'bg-white/70 hover:bg-white text-slate-600 border-white/90 shadow-sm'
+            }`}
           >
-            <Plus className="w-4 h-4" />
-            <span>Опубликовать выезд</span>
+            {tab.label}
           </button>
-        </div>
+        ))}
       </div>
 
       {/* Trips Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-        {filteredTrips.length === 0 ? (
-          <div className="md:col-span-2 text-center py-16 bg-slate-900/60 rounded-2xl border border-slate-800 text-slate-400 text-sm space-y-3">
-            <p>Нет запланированных рыбалок по выбранному фильтру.</p>
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-sky-300 text-xs font-medium border border-slate-700 transition inline-flex items-center gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Опубликовать первую поездку или заявку на поиск машины</span>
-            </button>
-          </div>
-        ) : (
-          filteredTrips.map(trip => {
-            const isUserJoined = activeUser
-              ? trip.participants.some(p => p.userId === activeUser.id)
-              : false;
+      {filteredTrips.length === 0 ? (
+        <div className="liquid-glass rounded-3xl p-12 text-center border border-white/80">
+          <Compass className="w-12 h-12 text-sky-400 mx-auto mb-3 opacity-80" />
+          <h3 className="text-base font-bold text-slate-700">Нет запланированных рыбалок</h3>
+          <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1 mb-5">
+            Создайте первый выезд на Белое море или дельту Двины, чтобы набрать экипаж и разделить бензин.
+          </p>
+          <button
+            onClick={handleOpenCreate}
+            className="px-5 py-2.5 rounded-2xl bg-sky-500 text-white text-xs font-semibold hover:bg-sky-600 shadow-md shadow-sky-500/20 transition"
+          >
+            + Запланировать выезд
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {filteredTrips.map(trip => {
             const isOrganizer = activeUser && trip.organizerId === activeUser.id;
-            const freeSlots = trip.maxCrew - trip.participants.length;
-            const isPassengerTrip = trip.tripType === 'passenger' || trip.hasCar === false;
+            const isJoined = activeUser && trip.participants.some(p => p.userId === activeUser.id);
+            const freeSeats = Math.max(0, trip.maxCrew - trip.participants.length);
 
             return (
               <div
                 key={trip.id}
-                className={`bg-slate-900 rounded-2xl border p-5 shadow-xl flex flex-col justify-between transition space-y-4 ${
-                  isPassengerTrip
-                    ? 'border-emerald-900/50 hover:border-emerald-700/60'
-                    : 'border-slate-800 hover:border-slate-700'
-                }`}
+                className="liquid-glass-card rounded-3xl p-5 border border-white/90 shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
               >
                 <div>
-                  {/* Top Status & Date */}
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border flex items-center gap-1 ${
-                          isPassengerTrip
-                            ? 'bg-emerald-950/60 text-emerald-300 border-emerald-800/60'
-                            : 'bg-sky-950/60 text-sky-300 border-sky-800/60'
-                        }`}
-                      >
-                        {isPassengerTrip ? (
-                          <>
-                            <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
-                            <span>Ищу водителя с авто</span>
-                          </>
-                        ) : (
-                          <>
-                            <Car className="w-3.5 h-3.5 text-sky-400" />
-                            <span>Водитель с авто</span>
-                          </>
-                        )}
-                      </span>
+                  {/* Top: Status & Date */}
+                  <div className="flex items-start justify-between gap-3 mb-3">
+                    <span
+                      className={`px-2.5 py-1 rounded-xl text-[11px] font-semibold border ${
+                        trip.status === 'Набор открыт'
+                          ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : trip.status === 'Экипаж набран'
+                          ? 'bg-amber-50 text-amber-700 border-amber-200'
+                          : 'bg-slate-100 text-slate-600 border-slate-200'
+                      }`}
+                    >
+                      {trip.status}
+                    </span>
 
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[11px] font-medium border ${
-                          trip.status === 'Набор открыт'
-                            ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/40'
-                            : 'bg-amber-950/40 text-amber-400 border-amber-900/40'
-                        }`}
-                      >
-                        {trip.status} {freeSlots > 0 && `(${freeSlots} мест)`}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 text-xs text-sky-400 font-mono">
-                      <Calendar className="w-3.5 h-3.5" />
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 bg-white/80 px-2.5 py-1 rounded-xl border border-white">
+                      <CalendarDays className="w-3.5 h-3.5 text-sky-500" />
                       <span>{trip.date}</span>
-                      <span>•</span>
-                      <Clock className="w-3.5 h-3.5" />
+                      <span className="text-slate-300">•</span>
+                      <Clock className="w-3.5 h-3.5 text-sky-500" />
                       <span>{trip.meetTime}</span>
                     </div>
                   </div>
 
-                  {/* Title & Destination */}
-                  <h3 className="text-base font-bold text-slate-100 hover:text-sky-300 transition cursor-pointer">
+                  {/* Title & Spot */}
+                  <h3 className="text-base font-bold text-slate-800 leading-snug">
                     {trip.title}
                   </h3>
 
-                  <div className="mt-2 space-y-1.5 text-xs text-slate-300">
-                    <div className="flex items-center gap-2 text-slate-400">
-                      <MapPin className="w-4 h-4 text-rose-400 shrink-0" />
-                      <span className="font-medium text-slate-200">{trip.destination}</span>
+                  <div className="mt-2.5 space-y-1.5 text-xs text-slate-600">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-rose-500 shrink-0" />
+                      <span className="font-semibold text-slate-800 truncate">{trip.destination}</span>
                     </div>
-
-                    <div className="flex items-center gap-2 text-slate-400">
-                      <Truck className="w-4 h-4 text-indigo-400 shrink-0" />
-                      <span>{trip.transportType}</span>
+                    <div className="flex items-center gap-2 text-slate-500">
+                      <Navigation className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                      <span className="truncate">Сбор: {trip.meetPlace}</span>
                     </div>
+                  </div>
 
-                    <div className="flex items-center gap-2 text-slate-400">
-                      <Clock className="w-4 h-4 text-amber-400 shrink-0" />
-                      <span>Сбор: {trip.meetPlace}</span>
-                    </div>
-
-                    {trip.targetFish && trip.targetFish.length > 0 && (
-                      <div className="flex items-center gap-2 text-slate-400 pt-1">
-                        <Fish className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <div className="flex flex-wrap gap-1">
-                          {trip.targetFish.map((fish, i) => (
-                            <span
-                              key={i}
-                              className="px-1.5 py-0.5 rounded bg-slate-950 text-slate-300 border border-slate-800 text-[10px]"
-                            >
-                              {fish}
-                            </span>
-                          ))}
-                        </div>
+                  {/* Route & Fuel Specs */}
+                  <div className="mt-4 grid grid-cols-3 gap-2 bg-sky-50/60 rounded-2xl p-2.5 border border-sky-100 text-center">
+                    <div>
+                      <div className="text-[10px] text-slate-500 font-medium">Маршрут</div>
+                      <div className="text-xs font-bold text-slate-800 mt-0.5">
+                        {trip.distanceKm ? `~${trip.distanceKm} км` : 'По месту'}
                       </div>
-                    )}
-                  </div>
-
-                  {/* Crew progress */}
-                  <div className="mt-4 pt-3 border-t border-slate-800/80">
-                    <div className="flex items-center justify-between text-xs text-slate-400 mb-1.5">
-                      <span className="flex items-center gap-1 font-medium">
-                        <Users className="w-3.5 h-3.5 text-sky-400" />
-                        <span>Экипаж: {trip.participants.length} из {trip.maxCrew} чел.</span>
-                      </span>
-                      <span className="text-[11px] text-slate-500">
-                        {freeSlots <= 0 ? 'Мест нет' : `Свободно мест: ${freeSlots}`}
-                      </span>
                     </div>
-
-                    <div className="w-full h-1.5 bg-slate-950 rounded-full overflow-hidden mb-3 border border-slate-800">
-                      <div
-                        className={`h-full transition-all ${
-                          trip.participants.length >= trip.maxCrew ? 'bg-amber-500' : 'bg-sky-500'
-                        }`}
-                        style={{ width: `${Math.min(100, (trip.participants.length / trip.maxCrew) * 100)}%` }}
-                      />
+                    <div>
+                      <div className="text-[10px] text-slate-500 font-medium">Бензин на чел.</div>
+                      <div className="text-xs font-bold text-sky-700 mt-0.5">
+                        {trip.costPerPerson ? `~${trip.costPerPerson} ₽` : 'Бесплатно'}
+                      </div>
                     </div>
-
-                    <div className="flex flex-wrap gap-1.5">
-                      {trip.participants.map(p => (
-                        <span
-                          key={p.userId}
-                          className={`px-2 py-1 rounded-lg text-xs flex items-center gap-1.5 border ${
-                            p.role === 'Организатор'
-                              ? 'bg-indigo-950/80 text-indigo-200 border-indigo-800/60'
-                              : 'bg-slate-950 text-slate-300 border-slate-800'
-                          }`}
-                        >
-                          <span className="font-medium">{p.userName}</span>
-                          {p.role === 'Организатор' && (
-                            <span className="text-[10px] text-indigo-400 font-bold">★ Капитан</span>
-                          )}
-                          {p.telegramUsername && (
-                            <span className="text-[10px] text-slate-500">@{p.telegramUsername}</span>
-                          )}
-                        </span>
-                      ))}
+                    <div>
+                      <div className="text-[10px] text-slate-500 font-medium">Свободно</div>
+                      <div className={`text-xs font-bold mt-0.5 ${freeSeats > 0 ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        {freeSeats > 0 ? `${freeSeats} из ${trip.maxCrew}` : 'Мест нет'}
+                      </div>
                     </div>
                   </div>
 
-                  {/* Notes / Special conditions */}
+                  {/* Notes & Target Fish */}
                   {trip.notes && (
-                    <div className="mt-3 p-2.5 rounded-xl bg-slate-950/70 border border-slate-800/80 text-xs text-slate-400">
-                      <span className="text-slate-300 font-medium mr-1">Инфо:</span>
-                      {trip.notes}
-                    </div>
+                    <p className="mt-3 text-xs text-slate-600 line-clamp-2 italic">
+                      «{trip.notes}»
+                    </p>
                   )}
                 </div>
 
-                {/* Bottom Action Buttons */}
-                <div className="pt-3 border-t border-slate-800/80 flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-1.5">
-                    {/* Share in Telegram button */}
-                    <button
-                      onClick={() => handleShareTrip(trip)}
-                      title="Поделиться в Telegram (группы / чаты)"
-                      className="p-2 rounded-xl bg-slate-800/80 hover:bg-sky-600/30 text-slate-300 hover:text-sky-300 border border-slate-700/60 transition flex items-center gap-1.5 text-xs font-medium"
-                    >
-                      <Share2 className="w-3.5 h-3.5 text-sky-400" />
-                      <span className="hidden sm:inline">В чат</span>
-                    </button>
-
-                    {/* Add to Google Calendar button */}
-                    <button
-                      onClick={() => handleAddToCalendar(trip)}
-                      title="Добавить напоминание в календарь"
-                      className="p-2 rounded-xl bg-slate-800/80 hover:bg-emerald-600/30 text-slate-300 hover:text-emerald-300 border border-slate-700/60 transition flex items-center gap-1.5 text-xs font-medium"
-                    >
-                      <Calendar className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>В календарь</span>
-                    </button>
+                {/* Bottom Actions: Crew + Edit/Delete/Join */}
+                <div className="mt-5 pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
+                  <div className="text-[11px] text-slate-500 font-medium">
+                    Организатор: <span className="font-semibold text-slate-700">{trip.organizerName}</span>
                   </div>
 
-                  {isUserJoined ? (
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs text-emerald-400 flex items-center gap-1 font-medium">
-                        <CheckCircle2 className="w-4 h-4" />
-                        Вы в экипаже
-                      </span>
-                      {!isOrganizer ? (
-                        <button
-                          onClick={() => {
-                            hapticFeedback('selection');
-                            setLeaveReasonModal({ tripId: trip.id });
-                          }}
-                          className="px-2.5 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/40 text-xs font-medium transition"
-                        >
-                          Выйти
-                        </button>
-                      ) : (
-                        <div className="flex gap-2">
-                          {onEditTrip && (
-                            <button
-                              onClick={() => {
-                                hapticFeedback('selection');
-                                setEditingTripId(trip.id);
-                                // Pre-fill state (would need to set all state fields here for editing)
-                                setTripType(trip.tripType || 'driver');
-                                setTitle(trip.title);
-                                setDestination(trip.destination);
-                                setDestCoords(trip.coordinates || null);
-                                setTargetFishInput(trip.targetFish?.join(', ') || '');
-                                setDate(trip.date);
-                                setMeetTime(trip.meetTime);
-                                setMeetPlace(trip.meetPlace || '');
-                                setMaxCrew(trip.maxCrew);
-                                setNotes(trip.notes || '');
-                                setIsModalOpen(true);
-                              }}
-                              className="px-2.5 py-1 rounded-lg bg-blue-950/40 hover:bg-blue-900/60 text-blue-300 border border-blue-800/40 text-xs font-medium transition"
-                            >
-                              Изменить
-                            </button>
-                          )}
-                          {onDeleteTrip && (
-                            <button
-                              onClick={() => {
-                                if (window.confirm('Вы точно хотите отменить и удалить этот выезд?')) {
-                                  hapticFeedback('heavy');
-                                  onDeleteTrip(trip.id);
-                                }
-                              }}
-                              className="px-2.5 py-1 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/40 text-xs font-medium transition"
-                            >
-                              Удалить
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
+                  <div className="flex items-center gap-1.5">
+                    {/* Edit button */}
                     <button
-                      onClick={() => {
-                        hapticFeedback('selection');
-                        onJoinTrip(trip.id);
-                      }}
-                      disabled={freeSlots <= 0}
-                      className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-white text-xs font-semibold transition shadow-md ${
-                        isPassengerTrip
-                          ? 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-950'
-                          : 'bg-sky-600 hover:bg-sky-500 shadow-sky-950'
-                      } disabled:opacity-40 disabled:cursor-not-allowed`}
+                      onClick={() => handleOpenEdit(trip)}
+                      title="Редактировать рыбалку"
+                      className="p-2 rounded-xl bg-white/80 hover:bg-white text-slate-600 hover:text-sky-600 border border-slate-200/60 shadow-sm transition"
                     >
-                      {isPassengerTrip ? (
-                        <>
-                          <Car className="w-3.5 h-3.5 text-emerald-200" />
-                          <span>Взять в свой экипаж</span>
-                        </>
-                      ) : (
-                        <>
-                          <Flame className="w-3.5 h-3.5 text-amber-300" />
-                          <span>{freeSlots <= 0 ? 'Мест нет' : 'Записаться в экипаж'}</span>
-                        </>
-                      )}
+                      <Edit3 className="w-3.5 h-3.5" />
                     </button>
-                  )}
+
+                    {/* Delete button (available if organizer or edit mode) */}
+                    {onDeleteTrip && (
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`Удалить рыбалку "${trip.title}"?`)) {
+                            hapticFeedback('heavy');
+                            onDeleteTrip(trip.id);
+                          }
+                        }}
+                        title="Удалить рыбалку"
+                        className="p-2 rounded-xl bg-white/80 hover:bg-rose-50 text-slate-400 hover:text-rose-600 border border-slate-200/60 shadow-sm transition"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+
+                    {/* Join / Leave button */}
+                    {isJoined ? (
+                      <button
+                        onClick={() => {
+                          hapticFeedback('medium');
+                          onLeaveTrip(trip.id);
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-semibold border border-rose-200 transition"
+                      >
+                        Выйти
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          hapticFeedback('success');
+                          onJoinTrip(trip.id);
+                        }}
+                        disabled={freeSeats <= 0}
+                        className="px-3 py-1.5 rounded-xl bg-sky-500 hover:bg-sky-600 disabled:opacity-50 text-white text-xs font-semibold shadow-sm transition"
+                      >
+                        В экипаж
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             );
-          })
-        )}
-      </div>
+          })}
+        </div>
+      )}
 
-      {/* Create Trip Modal */}
+      {/* CREATE / EDIT FISHING TRIP MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl max-w-xl w-full p-6 shadow-2xl space-y-5 my-8">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <Calendar className="w-5 h-5 text-sky-400" />
-                <h3 className="text-base sm:text-lg font-bold text-slate-100">
-                  Опубликовать поездку на рыбалку
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-md">
+          <div className="liquid-glass-card rounded-3xl max-w-xl w-full max-h-[90vh] flex flex-col border border-white/95 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Modal Header */}
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-base sm:text-lg font-bold text-slate-800">
+                  {editingTripId ? 'Редактировать рыбалку' : 'Создать рыбалку'}
                 </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Выбор точки, планирование маршрута и расчет топлива
+                </p>
               </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition"
+                className="p-2 rounded-2xl bg-white/80 hover:bg-white text-slate-400 hover:text-slate-700 border border-slate-200/80 transition"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Segmented Control: I have a car vs I am a passenger */}
-            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-950 rounded-xl border border-slate-800">
-              <button
-                type="button"
-                onClick={() => {
-                  hapticFeedback('selection');
-                  setTripType('driver');
-                }}
-                className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs font-semibold transition ${
-                  tripType === 'driver'
-                    ? 'bg-sky-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <Car className="w-4 h-4" />
-                <span>Я за рулём (Есть авто)</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  hapticFeedback('selection');
-                  setTripType('passenger');
-                }}
-                className={`flex items-center justify-center gap-2 py-2.5 px-3 rounded-lg text-xs font-semibold transition ${
-                  tripType === 'passenger'
-                    ? 'bg-emerald-600 text-white shadow-md'
-                    : 'text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <UserCheck className="w-4 h-4" />
-                <span>Я пассажир (Ищу авто)</span>
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateSubmit} className="space-y-4 text-xs">
+            {/* Modal Form */}
+            <form onSubmit={handleSubmitTrip} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+              {/* Trip Title */}
               <div>
-                <label className="block font-medium text-slate-300 mb-1">
-                  {tripType === 'driver'
-                    ? 'Название выезда / Маршрут'
-                    : 'Что ищете? (Например: Ищу попутку на Мудьюг в субботу)'}
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Название выезда
                 </label>
                 <input
                   type="text"
                   value={title}
                   onChange={e => setTitle(e.target.value)}
-                  placeholder={
+                  placeholder="Например: Выезд за навагой на Сухое Море"
+                  className="w-full px-3.5 py-2.5 rounded-2xl bg-white/90 border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 text-slate-800"
+                  required
+                />
+              </div>
+
+              {/* Trip Type (Driver vs Passenger) */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTripType('driver');
+                    hapticFeedback('selection');
+                  }}
+                  className={`py-2 px-3 rounded-2xl text-xs font-semibold border text-center transition ${
                     tripType === 'driver'
-                      ? 'Выезд на Мудьюг за навагой и корюшкой'
-                      : 'Ищу экипаж на Белое Море, готов скинуться на бензин'
-                  }
-                  required
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-sm text-slate-100 focus:outline-none focus:border-sky-500"
-                />
+                      ? 'bg-sky-500 text-white border-sky-500 shadow-sm'
+                      : 'bg-white/80 text-slate-600 border-slate-200'
+                  }`}
+                >
+                  🚗 Я водитель (есть авто)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTripType('passenger');
+                    hapticFeedback('selection');
+                  }}
+                  className={`py-2 px-3 rounded-2xl text-xs font-semibold border text-center transition ${
+                    tripType === 'passenger'
+                      ? 'bg-sky-500 text-white border-sky-500 shadow-sm'
+                      : 'bg-white/80 text-slate-600 border-slate-200'
+                  }`}
+                >
+                  🎒 Я пассажир (ищу попутку)
+                </button>
               </div>
 
-              {/* Destination & Quick Presets */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="font-medium text-slate-300">Водоем / Локация</label>
-                  <span className="text-[11px] text-slate-500">Быстрый выбор:</span>
-                </div>
-                <input
-                  type="text"
-                  value={destination}
-                  onChange={e => setDestination(e.target.value)}
-                  placeholder="Мудьюг / Сухое Море / Маймакса"
-                  required
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500 mb-2"
-                />
-
-                {/* Preset Chips */}
-                <div className="flex flex-wrap gap-1.5">
-                  {SPOT_PRESETS.map((preset, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => {
-                        hapticFeedback('selection');
-                        setDestination(preset.name);
-                        setDestCoords({ lat: preset.lat, lon: preset.lon });
-                      }}
-                      className={`px-2 py-1 rounded-lg text-[11px] border transition ${
-                        destination === preset.name
-                          ? 'bg-sky-950 text-sky-200 border-sky-700'
-                          : 'bg-slate-950 text-slate-400 border-slate-800 hover:text-slate-200'
-                      }`}
-                    >
-                      {preset.name.split('/')[0].trim()}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Date & Time with Quick Helpers */}
-              <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 space-y-2.5">
+              {/* Section 1: Spot Selection & Inline New Spot */}
+              <div className="bg-sky-50/50 p-4 rounded-3xl border border-sky-100 space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="font-medium text-slate-300 flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-sky-400" />
-                    <span>Дата и время выезда</span>
+                  <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Compass className="w-4 h-4 text-sky-600" />
+                    <span>Точка лова (куда едем)</span>
                   </label>
-                  <div className="flex items-center gap-1 text-[11px]">
-                    <button
-                      type="button"
-                      onClick={() => setQuickDate(0)}
-                      className="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800"
-                    >
-                      Сегодня
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setQuickDate(1)}
-                      className="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-800"
-                    >
-                      Завтра
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setNextWeekend(6)}
-                      className="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-sky-300 border border-slate-800 font-medium"
-                    >
-                      В субботу
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setNextWeekend(0)}
-                      className="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-sky-300 border border-slate-800 font-medium"
-                    >
-                      В воскресенье
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddSpotInline(!showAddSpotInline);
+                      hapticFeedback('selection');
+                    }}
+                    className="text-xs font-semibold text-sky-600 hover:text-sky-800 flex items-center gap-1"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Новая точка на карте</span>
+                  </button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <input
-                      type="date"
-                      value={date}
-                      onChange={e => setDate(e.target.value)}
-                      required
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500"
-                    />
+                {/* Spot selector */}
+                {!showAddSpotInline ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
+                    {spots.map(s => {
+                      const isSelected = customDestination === s.name;
+                      return (
+                        <div
+                          key={s.id}
+                          onClick={() => handleSpotSelect(s)}
+                          className={`p-2.5 rounded-2xl border text-left cursor-pointer transition ${
+                            isSelected
+                              ? 'bg-sky-500 text-white border-sky-500 shadow-sm'
+                              : 'bg-white/90 text-slate-700 border-slate-200 hover:border-sky-300'
+                          }`}
+                        >
+                          <div className="text-xs font-semibold truncate">{s.name}</div>
+                          <div className={`text-[10px] truncate ${isSelected ? 'text-sky-100' : 'text-slate-400'}`}>
+                            {s.area} • {s.recommendedFish?.join(', ') || 'Рыбалка'}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div>
-                    <input
-                      type="time"
-                      value={meetTime}
-                      onChange={e => setMeetTime(e.target.value)}
-                      required
-                      className="w-full bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Specific fields depending on driver vs passenger */}
-              {tripType === 'driver' ? (
-                <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block font-medium text-slate-300 mb-1">Транспорт / Техника</label>
-                      <input
-                        type="text"
-                        value={transportType}
-                        onChange={e => setTransportType(e.target.value)}
-                        placeholder="УАЗ / Нива / Снегоход"
-                        required
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500"
-                      />
+                ) : (
+                  /* Inline Drill-down: Map / Add spot directly */
+                  <div className="bg-white p-3 rounded-2xl border border-sky-200 space-y-3">
+                    <div className="text-xs font-semibold text-sky-900 flex items-center justify-between">
+                      <span>Добавление точки с геолокацией</span>
+                      <button
+                        type="button"
+                        onClick={() => setShowAddSpotInline(false)}
+                        className="text-slate-400 hover:text-slate-600"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
                     </div>
 
-                    <div>
-                      <label className="block font-medium text-slate-300 mb-1">Всего мест в машине</label>
-                      <input
-                        type="number"
-                        min={2}
-                        max={8}
-                        value={maxCrew}
-                        onChange={e => setMaxCrew(Number(e.target.value))}
-                        required
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block font-medium text-slate-300 mb-1">Место сбора / Старт</label>
                     <input
                       type="text"
+                      placeholder="Название точки (например: Мудьюг, восточная коса)"
+                      value={newSpotName}
+                      onChange={e => setNewSpotName(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-50 border border-slate-200 text-xs"
+                    />
+
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <label className="text-[10px] text-slate-400">Широта (Lat)</label>
+                        <input
+                          type="number"
+                          step="0.0001"
+                          value={newSpotLat}
+                          onChange={e => setNewSpotLat(Number(e.target.value))}
+                          className="w-full px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] text-slate-400">Долгота (Lon)</label>
+                        <input
+                          type="number"
+                          step="0.0001"
+                          value={newSpotLon}
+                          onChange={e => setNewSpotLon(Number(e.target.value))}
+                          className="w-full px-2 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Quick map preview */}
+                    <div className="rounded-xl overflow-hidden h-28 border border-slate-200 relative">
+                      <iframe
+                        src={`https://yandex.ru/map-widget/v1/?ll=${newSpotLon}%2C${newSpotLat}&z=10&l=sat&pt=${newSpotLon},${newSpotLat},pm2rdm`}
+                        className="w-full h-full border-0 pointer-events-none"
+                        title="Map preview"
+                      />
+                      <div className="absolute bottom-1 right-1 bg-slate-900/80 text-white text-[9px] px-2 py-0.5 rounded-full">
+                        Клик для фиксации координат
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSaveInlineSpot}
+                      className="w-full py-2 bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold rounded-xl transition"
+                    >
+                      Сохранить и выбрать эту точку
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Section 2: Route Planning & Fuel Auto-Calculation */}
+              <div className="bg-slate-50 p-4 rounded-3xl border border-slate-200 space-y-3">
+                <label className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <Route className="w-4 h-4 text-sky-600" />
+                  <span>Планирование маршрута и расчёт топлива</span>
+                </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <label className="block text-slate-600 mb-1 font-medium">Точка сбора (откуда)</label>
+                    <select
                       value={meetPlace}
-                      onChange={e => setMeetPlace(e.target.value)}
-                      placeholder="Причал пос. Лапоминка / набережная Седова"
-                      required
-                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500"
+                      onChange={e => handleMeetPlaceSelect(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-medium"
+                    >
+                      {POPULAR_MEET_POINTS.map(p => (
+                        <option key={p.id} value={p.name}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-600 mb-1 font-medium">
+                      Дистанция туда-обратно (км)
+                    </label>
+                    <input
+                      type="number"
+                      value={distanceKm}
+                      onChange={e => setDistanceKm(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-sky-800"
                     />
                   </div>
-                </>
-              ) : (
-                <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block font-medium text-slate-300 mb-1">Сколько вас человек?</label>
-                      <select
-                        value={passengerSeatsNeeded}
-                        onChange={e => setPassengerSeatsNeeded(Number(e.target.value))}
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500"
-                      >
-                        <option value={1}>1 человек (я один)</option>
-                        <option value={2}>2 человека (я с напарником)</option>
-                        <option value={3}>3 человека</option>
-                      </select>
-                    </div>
+                </div>
 
+                {/* Fuel Live Summary Card */}
+                <div className="bg-white p-3 rounded-2xl border border-slate-200/80 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <Fuel className="w-4 h-4 text-amber-500" />
                     <div>
-                      <label className="block font-medium text-slate-300 mb-1">Где удобно подсесть?</label>
-                      <input
-                        type="text"
-                        value={meetPlace}
-                        onChange={e => setMeetPlace(e.target.value)}
-                        placeholder="Соломбала / Центр / Левый берег"
-                        required
-                        className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500"
-                      />
+                      <div className="font-semibold text-slate-800">
+                        Итого топливо: ~{fuelPreview.totalCost} ₽
+                      </div>
+                      <div className="text-[10px] text-slate-400">
+                        {fuelPreview.liters} л при расходе {fuelConsumption} л/100км
+                      </div>
                     </div>
                   </div>
-
-                  {/* Passenger toggles */}
-                  <div className="space-y-2 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={splitFuelCost}
-                        onChange={e => setSplitFuelCost(e.target.checked)}
-                        className="rounded border-slate-700 text-emerald-500 focus:ring-0"
-                      />
-                      <span className="text-slate-300 font-medium">
-                        ⛽️ Готов разделить расходы на бензин с водителем (100%)
-                      </span>
-                    </label>
-
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={hasOwnGear}
-                        onChange={e => setHasOwnGear(e.target.checked)}
-                        className="rounded border-slate-700 text-emerald-500 focus:ring-0"
-                      />
-                      <span className="text-slate-300 font-medium">
-                        🎣 Свои снасти, рыболовный ящик и бур с собой
-                      </span>
-                    </label>
+                  <div className="text-right">
+                    <div className="font-bold text-sky-600 text-sm">
+                      ~{fuelPreview.costPerPerson} ₽
+                    </div>
+                    <div className="text-[10px] text-slate-500">с человека в экипаже</div>
                   </div>
-                </>
-              )}
+                </div>
+              </div>
 
+              {/* Date & Time */}
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="font-semibold text-slate-700">Дата выезда</label>
+                    <div className="flex gap-1 text-[10px] text-sky-600 font-semibold">
+                      <button type="button" onClick={() => setQuickDate(1)} className="hover:underline">
+                        Завтра
+                      </button>
+                      <span>•</span>
+                      <button type="button" onClick={() => setNextWeekend(6)} className="hover:underline">
+                        Сб
+                      </button>
+                      <span>•</span>
+                      <button type="button" onClick={() => setNextWeekend(0)} className="hover:underline">
+                        Вс
+                      </button>
+                    </div>
+                  </div>
+                  <input
+                    type="date"
+                    value={date}
+                    onChange={e => setDate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-medium"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-700 mb-1 font-semibold">Время сбора</label>
+                  <input
+                    type="time"
+                    value={meetTime}
+                    onChange={e => setMeetTime(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-medium"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Max Crew */}
               <div>
-                <label className="block font-medium text-slate-300 mb-1">Целевая рыба</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Всего мест в экипаже (включая водителя): {maxCrew}
+                </label>
                 <input
-                  type="text"
-                  value={targetFishInput}
-                  onChange={e => setTargetFishInput(e.target.value)}
-                  placeholder="Корюшка, Навага, Сиг, Окунь"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500"
+                  type="range"
+                  min="2"
+                  max="8"
+                  value={maxCrew}
+                  onChange={e => setMaxCrew(Number(e.target.value))}
+                  className="w-full accent-sky-500"
                 />
               </div>
 
+              {/* Notes */}
               <div>
-                <label className="block font-medium text-slate-300 mb-1">Дополнительные пожелания</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Примечания и пожелания
+                </label>
                 <textarea
-                  rows={2}
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
-                  placeholder="Особенности ледовой обстановки, насадки, договоренности по связи..."
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-sky-500"
+                  rows={2}
+                  className="w-full px-3.5 py-2 rounded-2xl bg-white border border-slate-200 text-xs focus:ring-2 focus:ring-sky-500"
+                  placeholder="Например: выезжаем затемно, берем ледобур 130мм..."
                 />
               </div>
 
-              <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
+              {/* Submit Buttons */}
+              <div className="pt-2 flex items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition"
+                  className="px-4 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold transition"
                 >
                   Отмена
                 </button>
                 <button
                   type="submit"
                   disabled={submitting}
-                  className={`px-5 py-2 rounded-xl text-white text-sm font-semibold transition shadow-md ${
-                    tripType === 'driver'
-                      ? 'bg-sky-600 hover:bg-sky-500 shadow-sky-950'
-                      : 'bg-emerald-600 hover:bg-emerald-500 shadow-emerald-950'
-                  } disabled:opacity-50`}
+                  className="px-6 py-2.5 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white text-xs font-semibold shadow-md shadow-sky-500/20 active:scale-95 transition"
                 >
-                  {submitting
-                    ? 'Публикация...'
-                    : tripType === 'driver'
-                    ? 'Опубликовать выезд экипажа'
-                    : 'Опубликовать заявку на поиск авто'}
+                  {submitting ? 'Сохранение...' : editingTripId ? 'Сохранить изменения' : 'Опубликовать рыбалку'}
                 </button>
               </div>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Leave Reason Modal */}
-      {leaveReasonModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl relative">
-            <button
-              onClick={() => {
-                setLeaveReasonModal(null);
-                setLeaveReason('');
-              }}
-              className="absolute right-4 top-4 text-slate-500 hover:text-slate-300"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <h3 className="text-xl font-semibold text-slate-100 mb-2">Причина отмены</h3>
-            <p className="text-sm text-slate-400 mb-4">
-              Сообщите организатору, почему вы не сможете поехать.
-            </p>
-            <textarea
-              value={leaveReason}
-              onChange={(e) => setLeaveReason(e.target.value)}
-              placeholder="Например: Заболел, вызвали на работу, сломалась машина..."
-              className="w-full h-24 rounded-xl bg-slate-950 border border-slate-800 px-4 py-3 text-slate-200 focus:outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 resize-none mb-4"
-              required
-            />
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => {
-                  setLeaveReasonModal(null);
-                  setLeaveReason('');
-                }}
-                className="px-4 py-2 rounded-xl text-slate-300 hover:bg-slate-800 font-medium text-sm transition"
-              >
-                Отмена
-              </button>
-              <button
-                onClick={() => {
-                  if (leaveReason.trim()) {
-                    onLeaveTrip(leaveReasonModal.tripId, leaveReason.trim());
-                    setLeaveReasonModal(null);
-                    setLeaveReason('');
-                  } else {
-                    alert('Пожалуйста, укажите причину.');
-                  }
-                }}
-                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-semibold text-sm transition shadow-md shadow-rose-950"
-              >
-                Покинуть экипаж
-              </button>
-            </div>
           </div>
         </div>
       )}

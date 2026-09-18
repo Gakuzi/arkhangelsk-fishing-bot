@@ -43,5 +43,6 @@ export const config = {
   queueDocId: process.env.QUEUE_DOC_ID || '',
   appUrl: process.env.APP_URL || 'https://fishing-bot.e-klimov.ru',
   botUsername: process.env.BOT_USERNAME || 'ArkhangelskFishingBot',
-  enablePolling: process.env.ENABLE_NODE_BOT_POLLING === 'true'
+  enablePolling: process.env.ENABLE_NODE_BOT_POLLING === 'true',
+  telegramApiBase: process.env.TELEGRAM_API_BASE || 'https://api.telegram.org'
 };

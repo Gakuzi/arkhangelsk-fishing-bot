@@ -105,6 +105,7 @@ async def handle_menu_command(message: Message):
     )
 
 @router.message(F.chat.type == "private", Command(commands=["app", "webapp"]))
+@router.message(F.chat.type == "private", F.text.startswith("🎣 Открыть Mini App"))
 @router.message(F.chat.type == "private", F.text == "🌊 Запустить Поморский Mini App")
 async def handle_webapp_command(message: Message):
     await message.answer(
@@ -194,6 +195,7 @@ async def handle_fuel_command(message: Message):
     await message.answer(calc_text, parse_mode="HTML", reply_markup=keyboards.get_car_inline_keyboard(cost_per_km))
 
 @router.message(F.chat.type == "private", Command("profile"))
+@router.message(F.chat.type == "private", F.text.startswith("👤 Настройки"))
 @router.message(F.chat.type == "private", F.text.startswith("👤 Мой профиль"))
 async def handle_profile_command(message: Message):
     user_id = message.from_user.id if message.from_user else 0
@@ -256,7 +258,9 @@ async def handle_spots_command(message: Message):
         reply_markup=keyboards.get_spots_keyboard()
     )
 
-@router.message(F.chat.type == "private", Command("trips"))
+@router.message(F.chat.type == "private", Command(commands=["trips", "рыбалки", "выезды"]))
+@router.message(F.chat.type == "private", F.text.startswith("🎣 Рыбалки"))
+@router.message(F.chat.type == "private", F.text.startswith("🚗 Экипажи"))
 async def handle_trips_command(message: Message):
     trips = database.get_trips()
     if not trips:

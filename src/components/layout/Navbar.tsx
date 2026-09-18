@@ -1,17 +1,17 @@
 import React from 'react';
 import {
-  Anchor,
-  User,
-  Calendar,
   Compass,
   Fish,
   RotateCw,
-  Sparkles
+  Anchor,
+  User,
+  MapPin,
+  CalendarDays
 } from 'lucide-react';
 import { UserProfile } from '../../types/index.ts';
 import { hapticFeedback, isInsideTelegram } from '../../services/telegramWebApp.ts';
 
-export type ActiveTab = 'profile' | 'trips' | 'spots' | 'history';
+export type ActiveTab = 'trips' | 'spots' | 'history' | 'profile';
 
 interface NavbarProps {
   activeTab: ActiveTab;
@@ -35,79 +35,86 @@ export const Navbar: React.FC<NavbarProps> = ({
     onTabChange(tab);
   };
 
+  const tabs: { id: ActiveTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+    { id: 'trips', label: 'Рыбалки', icon: CalendarDays },
+    { id: 'spots', label: 'Точки лова', icon: Compass },
+    { id: 'history', label: 'Уловы', icon: Fish },
+    { id: 'profile', label: 'Профиль', icon: User }
+  ];
+
   return (
     <>
-      {/* Top Header - Personal Telegram Mini App */}
-      <header className="sticky top-0 z-30 bg-slate-950/95 backdrop-blur border-b border-slate-850 pt-[env(safe-area-inset-top)]">
+      {/* Top Header - Liquid Glass Header */}
+      <header className="sticky top-0 z-30 liquid-glass border-b border-white/80 pt-[env(safe-area-inset-top)] transition-all">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between py-2.5 gap-3">
-            {/* Brand Logo & Title */}
+          <div className="flex items-center justify-between py-3 gap-3">
+            {/* Logo & Region */}
             <div
-              onClick={() => handleTabClick('profile')}
-              className="flex items-center gap-2.5 min-w-0 cursor-pointer select-none"
+              onClick={() => handleTabClick('trips')}
+              className="flex items-center gap-3 cursor-pointer select-none group"
             >
-              <div className="w-8 h-8 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-200 shrink-0 shadow-sm">
-                <Anchor className="w-4 h-4 text-sky-400" />
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-sky-400 to-blue-600 flex items-center justify-center text-white shadow-md shadow-sky-500/20 group-hover:scale-105 transition-transform">
+                <Anchor className="w-5 h-5" />
               </div>
               <div className="min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-semibold text-slate-100 text-sm sm:text-base tracking-tight truncate">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-slate-800 text-sm sm:text-base tracking-tight truncate">
                     Поморский Рыбак
                   </span>
                   {inTelegram && (
-                    <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-medium bg-emerald-950/80 text-emerald-400 border border-emerald-800/80 shrink-0">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-100 text-sky-700 border border-sky-200">
                       Telegram
                     </span>
                   )}
                 </div>
-                <div className="text-[10px] text-slate-400 truncate">
-                  Архангельск • Белое Море & Дельта Двины
+                <div className="text-[11px] text-slate-500 truncate flex items-center gap-1 font-medium">
+                  <MapPin className="w-3 h-3 text-sky-500 inline" />
+                  Архангельск • Белое море • Северная Двина
                 </div>
               </div>
             </div>
 
-            {/* Right: Personal Cabinet Identity & Refresh */}
-            <div className="flex items-center gap-2 shrink-0">
+            {/* Right: Sync & Profile badge */}
+            <div className="flex items-center gap-2.5">
               <button
                 onClick={() => {
                   hapticFeedback('light');
                   if (onRefresh) onRefresh();
                 }}
                 title="Синхронизировать данные"
-                className="p-2 rounded-xl bg-slate-900 hover:bg-slate-850 active:scale-95 border border-slate-800 text-slate-400 hover:text-slate-200 transition"
+                className="p-2.5 rounded-2xl bg-white/70 hover:bg-white active:scale-95 border border-white/90 shadow-sm text-slate-600 hover:text-sky-600 transition"
               >
-                <RotateCw className="w-3.5 h-3.5" />
+                <RotateCw className="w-4 h-4" />
               </button>
 
-              {/* Single User Identity Chip (NO switching, strictly personal cabinet) */}
               <button
                 onClick={() => handleTabClick('profile')}
-                className={`flex items-center gap-2 px-2.5 py-1.5 rounded-xl border transition text-left ${
+                className={`flex items-center gap-2.5 px-3 py-1.5 rounded-2xl transition border ${
                   activeTab === 'profile'
-                    ? 'bg-slate-900 border-sky-500/50 shadow-sm'
-                    : 'bg-slate-900/80 hover:bg-slate-850 border-slate-800'
+                    ? 'bg-sky-50/90 border-sky-300 text-sky-900 shadow-sm'
+                    : 'bg-white/70 hover:bg-white border-white/90 text-slate-700 shadow-sm'
                 }`}
-                title="Перейти в личный кабинет"
               >
-                <div className="w-7 h-7 rounded-lg bg-slate-800 border border-slate-700 overflow-hidden flex items-center justify-center text-xs font-semibold text-slate-200 shrink-0 relative">
+                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-slate-100 to-sky-100 border border-white overflow-hidden flex items-center justify-center text-xs font-bold text-sky-800 shadow-inner">
                   {user?.avatarUrl ? (
                     <img
                       src={user.avatarUrl}
                       alt={user.name}
                       referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover rounded-lg"
+                      className="w-full h-full object-cover rounded-xl"
                       onError={(e) => {
                         (e.target as HTMLElement).style.display = 'none';
                       }}
                     />
-                  ) : null}
-                  <span className="select-none">{user?.name?.[0] || 'Р'}</span>
+                  ) : (
+                    <span>{user?.name?.[0] || 'Р'}</span>
+                  )}
                 </div>
-                <div className="text-left hidden xs:block sm:block max-w-[130px]">
-                  <div className="text-xs font-medium text-slate-200 leading-tight truncate">
-                    {user?.name || 'Личный кабинет'}
+                <div className="text-left hidden xs:block sm:block max-w-[120px]">
+                  <div className="text-xs font-semibold text-slate-800 truncate leading-tight">
+                    {user?.name || 'Рыбак'}
                   </div>
-                  <div className="text-[10px] text-sky-400/90 leading-tight truncate font-mono">
+                  <div className="text-[10px] text-sky-600 font-medium truncate leading-tight">
                     {user?.telegramUsername ? `@${user.telegramUsername}` : 'Кабинет'}
                   </div>
                 </div>
@@ -116,120 +123,66 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
 
           {/* Desktop Navigation Tabs */}
-          <nav className="hidden md:flex items-center gap-1.5 py-2 border-t border-slate-850 text-xs">
-            <button
-              onClick={() => handleTabClick('profile')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition font-medium ${
-                activeTab === 'profile'
-                  ? 'bg-slate-200 text-slate-900 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-              }`}
-            >
-              <User className="w-3.5 h-3.5" />
-              <span>Личный кабинет</span>
-            </button>
-
-            <button
-              onClick={() => handleTabClick('trips')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition font-medium ${
-                activeTab === 'trips'
-                  ? 'bg-slate-200 text-slate-900 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-              }`}
-            >
-              <Calendar className="w-3.5 h-3.5" />
-              <span>Выезды на рыбалку</span>
-              {tripsCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded text-[10px] bg-slate-800 text-slate-300 border border-slate-700">
-                  {tripsCount}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => handleTabClick('spots')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition font-medium ${
-                activeTab === 'spots'
-                  ? 'bg-slate-200 text-slate-900 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-              }`}
-            >
-              <Compass className="w-3.5 h-3.5" />
-              <span>Карта и точки лова</span>
-            </button>
-
-            <button
-              onClick={() => handleTabClick('history')}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg transition font-medium ${
-                activeTab === 'history'
-                  ? 'bg-slate-200 text-slate-900 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-900'
-              }`}
-            >
-              <Fish className="w-3.5 h-3.5" />
-              <span>Журнал уловов</span>
-            </button>
+          <nav className="hidden md:flex items-center gap-2 py-2 border-t border-slate-200/50">
+            {tabs.map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => handleTabClick(tab.id)}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-2xl text-xs font-semibold transition-all ${
+                    isActive
+                      ? 'bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/25 scale-[1.02]'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
+                  }`}
+                >
+                  <Icon className="w-4 h-4" />
+                  <span>{tab.label}</span>
+                  {tab.id === 'trips' && tripsCount > 0 && (
+                    <span
+                      className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                        isActive ? 'bg-white/20 text-white' : 'bg-sky-100 text-sky-700'
+                      }`}
+                    >
+                      {tripsCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </nav>
         </div>
       </header>
 
-      {/* Mobile Bottom Navigation Bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur border-t border-slate-800 pb-[env(safe-area-inset-bottom)] px-3 py-1 shadow-2xl">
-        <div className="grid grid-cols-4 gap-1">
-          <button
-            onClick={() => handleTabClick('profile')}
-            className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl transition min-h-[48px] ${
-              activeTab === 'profile'
-                ? 'text-sky-400 font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <User className="w-4 h-4" />
-            <span className="text-[10px] mt-1">Кабинет</span>
-          </button>
-
-          <button
-            onClick={() => handleTabClick('trips')}
-            className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl transition min-h-[48px] ${
-              activeTab === 'trips'
-                ? 'text-sky-400 font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <div className="relative">
-              <Calendar className="w-4 h-4" />
-              {tripsCount > 0 && (
-                <span className="absolute -top-1 -right-2 w-3.5 h-3.5 rounded-full bg-sky-500 text-[9px] text-slate-950 flex items-center justify-center font-bold">
-                  {tripsCount}
-                </span>
-              )}
-            </div>
-            <span className="text-[10px] mt-1">Выезды</span>
-          </button>
-
-          <button
-            onClick={() => handleTabClick('spots')}
-            className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl transition min-h-[48px] ${
-              activeTab === 'spots'
-                ? 'text-sky-400 font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Compass className="w-4 h-4" />
-            <span className="text-[10px] mt-1">Точки</span>
-          </button>
-
-          <button
-            onClick={() => handleTabClick('history')}
-            className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl transition min-h-[48px] ${
-              activeTab === 'history'
-                ? 'text-sky-400 font-semibold'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Fish className="w-4 h-4" />
-            <span className="text-[10px] mt-1">Уловы</span>
-          </button>
+      {/* Mobile Floating Liquid Glass Dock */}
+      <div className="md:hidden fixed bottom-3 left-3 right-3 z-40 pb-[env(safe-area-inset-bottom)]">
+        <div className="liquid-glass rounded-3xl p-1.5 shadow-xl shadow-slate-900/10 border border-white/90 grid grid-cols-4 gap-1">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => handleTabClick(tab.id)}
+                className={`flex flex-col items-center justify-center py-2 px-1 rounded-2xl transition-all relative ${
+                  isActive
+                    ? 'bg-gradient-to-b from-sky-500 to-blue-600 text-white shadow-md shadow-sky-500/30 font-semibold'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/50 font-medium'
+                }`}
+              >
+                <div className="relative">
+                  <Icon className="w-4 h-4" />
+                  {tab.id === 'trips' && tripsCount > 0 && !isActive && (
+                    <span className="absolute -top-1 -right-2 w-3.5 h-3.5 rounded-full bg-sky-500 text-[9px] text-white flex items-center justify-center font-bold">
+                      {tripsCount}
+                    </span>
+                  )}
+                </div>
+                <span className="text-[11px] mt-1 tracking-tight">{tab.label}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </>

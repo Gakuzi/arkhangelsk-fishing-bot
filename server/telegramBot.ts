@@ -48,10 +48,11 @@ export class TelegramBotService {
   public async callApi(method: string, payload: Record<string, any> = {}) {
     if (!config.telegramToken) return null;
     try {
-      const res = await fetch(`https://api.telegram.org/bot${config.telegramToken}/${method}`, {
+      const res = await fetch(`${config.telegramApiBase}/bot${config.telegramToken}/${method}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(3500)
       });
       return await res.json();
     } catch (err) {
@@ -79,7 +80,7 @@ export class TelegramBotService {
     while (this.isPolling) {
       try {
         const res = await fetch(
-          `https://api.telegram.org/bot${config.telegramToken}/getUpdates?offset=${this.offset}&timeout=15`,
+          `${config.telegramApiBase}/bot${config.telegramToken}/getUpdates?offset=${this.offset}&timeout=15`,
           { signal: this.pollAbortController?.signal }
         );
         const data = await res.json();

@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
 import {
-  MapPin,
   Compass,
+  MapPin,
+  Plus,
+  Edit3,
+  Trash2,
   ExternalLink,
   Copy,
   Check,
-  Plus,
-  X
+  CalendarDays,
+  Layers,
+  X,
+  Fish
 } from 'lucide-react';
 import { FishingSpot, UserProfile } from '../../types/index.ts';
-import { YandexFishingMap } from './YandexFishingMap.tsx';
 import { hapticFeedback } from '../../services/telegramWebApp.ts';
 
 interface FishingSpotsViewProps {
@@ -18,6 +22,7 @@ interface FishingSpotsViewProps {
   onAddSpot: (spot: any) => Promise<void>;
   onEditSpot?: (id: string, spot: any) => Promise<void>;
   onDeleteSpot?: (id: string) => Promise<void>;
+  onCreateTripWithSpot?: (spot: FishingSpot) => void;
 }
 
 export const FishingSpotsView: React.FC<FishingSpotsViewProps> = ({
@@ -25,61 +30,85 @@ export const FishingSpotsView: React.FC<FishingSpotsViewProps> = ({
   activeUser,
   onAddSpot,
   onEditSpot,
-  onDeleteSpot
+  onDeleteSpot,
+  onCreateTripWithSpot
 }) => {
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [selectedSpot, setSelectedSpot] = useState<FishingSpot | null>(spots[0] || null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSpotId, setEditingSpotId] = useState<string | null>(null);
+  const [mapType, setMapType] = useState<'sat' | 'map'>('sat');
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Form State
   const [name, setName] = useState('');
+  const [area, setArea] = useState('Сухое Море / Мудьюг');
   const [lat, setLat] = useState<number>(64.8820);
   const [lon, setLon] = useState<number>(40.2910);
-  const [area, setArea] = useState('Сухое Море / Мудьюг');
-  const [recommendedFishInput, setRecommendedFishInput] = useState('Навага, Корюшка');
-  const [season, setSeason] = useState<FishingSpot['season']>('Зима (со льда)');
+  const [recommendedFish, setRecommendedFish] = useState('Навага, Корюшка');
   const [depthMeters, setDepthMeters] = useState('4-6');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  const handleCopyCoords = (spot: FishingSpot) => {
-    hapticFeedback('light');
-    const text = `${spot.lat.toFixed(5)}, ${spot.lon.toFixed(5)}`;
-    navigator.clipboard.writeText(text);
-    setCopiedId(spot.id);
-    setTimeout(() => setCopiedId(null), 2000);
+  const active = selectedSpot || spots[0] || {
+    id: 'default',
+    name: 'Сухое море / Мудьюг',
+    lat: 64.8820,
+    lon: 40.2910,
+    area: 'Белое Море'
   };
 
-  const handleCreateSpot = async (e: React.FormEvent) => {
+  const handleOpenAdd = () => {
+    setEditingSpotId(null);
+    setName('');
+    setArea('Дельта Северной Двины');
+    setLat(64.5500);
+    setLon(40.4200);
+    setRecommendedFish('Навага, Сиг, Корюшка');
+    setDepthMeters('3-5');
+    setDescription('');
+    setIsModalOpen(true);
+    hapticFeedback('medium');
+  };
+
+  const handleOpenEdit = (spot: FishingSpot) => {
+    setEditingSpotId(spot.id);
+    setName(spot.name);
+    setArea(spot.area || 'Белое море');
+    setLat(spot.lat);
+    setLon(spot.lon);
+    setRecommendedFish(spot.recommendedFish?.join(', ') || 'Навага, Корюшка');
+    setDepthMeters(spot.depthMeters || '4-6');
+    setDescription(spot.description || '');
+    setIsModalOpen(true);
+    hapticFeedback('medium');
+  };
+
+  const handleSaveSpot = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !activeUser) return;
+    if (!name.trim() || !activeUser) return;
 
     setSubmitting(true);
     try {
-      const recommendedFish = recommendedFishInput.split(',').map(s => s.trim()).filter(Boolean);
-      const spotData = {
-        name,
+      const payload = {
+        name: name.trim(),
         lat: Number(lat),
         lon: Number(lon),
-        area,
-        recommendedFish,
-        season,
+        area: area.trim(),
+        recommendedFish: recommendedFish.split(',').map(s => s.trim()).filter(Boolean),
+        season: 'Круглый год',
         depthMeters,
-        description: description || 'Рыбное место Поморья',
+        description: description.trim() || 'Рыбное место в Архангельской области',
         addedBy: activeUser.name
       };
 
       if (editingSpotId && onEditSpot) {
-        await onEditSpot(editingSpotId, spotData);
+        await onEditSpot(editingSpotId, payload);
       } else {
-        await onAddSpot(spotData);
+        await onAddSpot(payload);
       }
-      
-      setEditingSpotId(null);
+
       setIsModalOpen(false);
-      setName('');
-      setDescription('');
+      setEditingSpotId(null);
       hapticFeedback('success');
     } catch (err) {
       console.error(err);
@@ -88,144 +117,214 @@ export const FishingSpotsView: React.FC<FishingSpotsViewProps> = ({
     }
   };
 
+  const handleCopy = (spot: FishingSpot) => {
+    hapticFeedback('light');
+    const text = `${spot.lat.toFixed(5)}, ${spot.lon.toFixed(5)}`;
+    navigator.clipboard.writeText(text);
+    setCopiedId(spot.id);
+    setTimeout(() => setCopiedId(null), 2000);
+  };
+
   return (
-    <div className="space-y-5 max-w-5xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-slate-900/90 rounded-2xl border border-slate-800 p-5 shadow-sm">
+    <div className="space-y-6 max-w-5xl mx-auto">
+      {/* Header bar */}
+      <div className="liquid-glass-card rounded-3xl p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-base sm:text-lg font-semibold text-slate-100">Карта и точки лова</h2>
-            <span className="px-2 py-0.5 rounded text-[11px] font-mono bg-slate-800 text-slate-300 border border-slate-700">
+            <Compass className="w-6 h-6 text-sky-600" />
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-800 tracking-tight">
+              Точки лова и карта
+            </h1>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-100 text-sky-800 border border-sky-200">
               Яндекс.Карты
             </span>
           </div>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Проверенные клевые места, протоки, свалы и банки в дельте Северной Двины и на Белом Море
+          <p className="text-xs sm:text-sm text-slate-500 mt-1 font-medium">
+            Спутниковые снимки ледовых полей, проток дельты Двины и проверенные уловистые места
           </p>
         </div>
 
         <button
-          onClick={() => {
-            hapticFeedback('selection');
-            setIsModalOpen(true);
-          }}
-          className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-100 border border-slate-700 text-xs font-medium transition shrink-0 self-start sm:self-auto"
+          onClick={handleOpenAdd}
+          className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-semibold text-sm shadow-md shadow-sky-500/25 active:scale-95 transition"
         >
-          <Plus className="w-4 h-4 text-emerald-400" />
+          <Plus className="w-4 h-4" />
           <span>Добавить точку</span>
         </button>
       </div>
 
-      {/* Embedded Yandex Map */}
-      <YandexFishingMap
-        spots={spots}
-        selectedSpot={selectedSpot}
-        onSelectSpot={setSelectedSpot}
-        onOpenAddModal={() => setIsModalOpen(true)}
-      />
+      {/* Main Map Box */}
+      <div className="liquid-glass-card rounded-3xl p-4 sm:p-5 overflow-hidden space-y-4">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-rose-500" />
+            <span className="text-sm font-bold text-slate-800 truncate">
+              {active.name}
+            </span>
+            <span className="text-xs text-slate-500 font-mono hidden sm:inline">
+              ({active.lat.toFixed(4)}, {active.lon.toFixed(4)})
+            </span>
+          </div>
 
-      {/* Spots Grid */}
-      <div className="space-y-3">
-        <div className="text-xs font-semibold text-slate-300 px-1">
-          Все сохраненные рыболовные локации ({spots.length})
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {spots.map(s => {
-            const isSelected = selectedSpot?.id === s.id;
-            return (
-              <div
-                key={s.id}
-                onClick={() => {
-                  hapticFeedback('selection');
-                  setSelectedSpot(s);
-                }}
-                className={`p-4 rounded-xl border cursor-pointer transition ${
-                  isSelected
-                    ? 'bg-slate-900 border-slate-600 shadow-sm'
-                    : 'bg-slate-950/70 border-slate-800/80 hover:border-slate-700'
+          <div className="flex items-center gap-2">
+            {/* Map Mode selector */}
+            <div className="flex bg-slate-100 p-1 rounded-xl text-xs font-semibold">
+              <button
+                onClick={() => setMapType('sat')}
+                className={`px-3 py-1 rounded-lg transition ${
+                  mapType === 'sat' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'
                 }`}
               >
-                <div className="flex items-start justify-between gap-2 mb-1.5">
-                  <div className="font-semibold text-xs text-slate-100 truncate">{s.name}</div>
-                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 shrink-0">
-                    {s.season}
-                  </span>
-                </div>
+                Спутник
+              </button>
+              <button
+                onClick={() => setMapType('map')}
+                className={`px-3 py-1 rounded-lg transition ${
+                  mapType === 'map' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'
+                }`}
+              >
+                Схема
+              </button>
+            </div>
 
-                <div className="text-[11px] text-slate-400 mb-2 truncate">
-                  📍 {s.area}
-                </div>
+            <a
+              href={`https://yandex.ru/maps/?rtext=~${active.lat}%2C${active.lon}&rtt=auto`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 text-xs font-semibold border border-sky-200 transition"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">В Навигатор</span>
+            </a>
+          </div>
+        </div>
 
-                {s.description && (
-                  <p className="text-[11px] text-slate-400 line-clamp-2 mb-3">
-                    {s.description}
-                  </p>
-                )}
+        {/* Interactive Yandex Map iFrame with all spots pinned */}
+        <div className="rounded-2xl overflow-hidden h-[340px] sm:h-[420px] border border-slate-200 relative bg-slate-100 shadow-inner">
+          <iframe
+            src={`https://yandex.ru/map-widget/v1/?ll=${active.lon}%2C${active.lat}&z=11&l=${mapType}&pt=${spots
+              .map(s => `${s.lon},${s.lat},pm2rdm`)
+              .join('~')}`}
+            className="w-full h-full border-0"
+            title="Рыболовная карта Архангельской области"
+          />
+        </div>
+      </div>
 
-                <div className="pt-2 border-t border-slate-850 flex items-center justify-between text-[11px] text-slate-400">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleCopyCoords(s);
-                    }}
-                    className="flex items-center gap-1 font-mono text-slate-400 hover:text-slate-200 transition"
-                  >
-                    {copiedId === s.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                    <span>{s.lat.toFixed(2)}, {s.lon.toFixed(2)}</span>
-                  </button>
-                  <div className="flex gap-2 items-center">
-                    {(activeUser && s.addedBy === activeUser.name) && (
-                      <>
-                        {onEditSpot && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditingSpotId(s.id);
-                              setName(s.name);
-                              setLat(s.lat);
-                              setLon(s.lon);
-                              setArea(s.area);
-                              setRecommendedFishInput(s.recommendedFish?.join(', ') || '');
-                              setSeason(s.season as any);
-                              setDepthMeters(s.depthMeters || '');
-                              setDescription(s.description || '');
-                              setIsModalOpen(true);
-                            }}
-                            className="text-blue-400 hover:text-blue-300 transition"
-                          >
-                            Изменить
-                          </button>
+      {/* Spots Grid / Cards with Edit & Delete */}
+      <div className="space-y-3">
+        <h3 className="text-sm font-bold text-slate-700 px-1">
+          Сохранённые точки ({spots.length})
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+          {spots.map(spot => {
+            const isSelected = selectedSpot?.id === spot.id;
+            return (
+              <div
+                key={spot.id}
+                onClick={() => {
+                  setSelectedSpot(spot);
+                  hapticFeedback('selection');
+                }}
+                className={`liquid-glass-card rounded-2xl p-4 cursor-pointer transition-all border flex flex-col justify-between ${
+                  isSelected
+                    ? 'border-sky-500 ring-2 ring-sky-500/20 shadow-md'
+                    : 'border-white/90 hover:border-sky-300'
+                }`}
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-800 leading-snug">
+                        {spot.name}
+                      </h4>
+                      <p className="text-xs text-sky-600 font-medium mt-0.5">
+                        {spot.area}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          handleCopy(spot);
+                        }}
+                        title="Скопировать координаты"
+                        className="p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-500"
+                      >
+                        {copiedId === spot.id ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
                         )}
-                        {onDeleteSpot && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (window.confirm('Удалить эту точку?')) {
-                                onDeleteSpot(s.id);
-                              }
-                            }}
-                            className="text-rose-400 hover:text-rose-300 transition"
-                          >
-                            Удалить
-                          </button>
-                        )}
-                      </>
-                    )}
-                    <a
-                      href={`https://yandex.ru/maps/?rtext=~${s.lat}%2C${s.lon}&rtt=auto`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={e => e.stopPropagation()}
-                      className="text-slate-400 hover:text-slate-200 flex items-center gap-1 ml-1"
-                    >
-                      <span>Маршрут</span>
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
+                      </button>
+
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          handleOpenEdit(spot);
+                        }}
+                        title="Редактировать точку"
+                        className="p-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-600 hover:text-sky-600"
+                      >
+                        <Edit3 className="w-3.5 h-3.5" />
+                      </button>
+
+                      {onDeleteSpot && (
+                        <button
+                          onClick={e => {
+                            e.stopPropagation();
+                            if (window.confirm(`Удалить точку "${spot.name}"?`)) {
+                              hapticFeedback('heavy');
+                              onDeleteSpot(spot.id);
+                            }
+                          }}
+                          title="Удалить точку"
+                          className="p-1.5 rounded-lg bg-slate-50 hover:bg-rose-50 text-slate-400 hover:text-rose-600"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
+
+                  {/* Fish & Depth */}
+                  <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-600 mt-2">
+                    <span className="px-2 py-0.5 rounded-lg bg-sky-50 text-sky-800 font-medium border border-sky-100">
+                      🐟 {spot.recommendedFish?.join(', ') || 'Любая рыба'}
+                    </span>
+                    {spot.depthMeters && (
+                      <span className="px-2 py-0.5 rounded-lg bg-slate-100 text-slate-700 font-medium">
+                        Глубина: {spot.depthMeters} м
+                      </span>
+                    )}
+                  </div>
+
+                  {spot.description && (
+                    <p className="mt-2 text-xs text-slate-500 line-clamp-2">
+                      {spot.description}
+                    </p>
+                  )}
+                </div>
+
+                <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+                  <span className="text-slate-400 font-mono text-[10px]">
+                    {spot.lat.toFixed(4)}, {spot.lon.toFixed(4)}
+                  </span>
+
+                  {onCreateTripWithSpot && (
+                    <button
+                      onClick={e => {
+                        e.stopPropagation();
+                        onCreateTripWithSpot(spot);
+                      }}
+                      className="px-2.5 py-1 rounded-xl bg-sky-100 hover:bg-sky-200 text-sky-800 font-semibold text-[11px] flex items-center gap-1 transition"
+                    >
+                      <CalendarDays className="w-3 h-3" />
+                      <span>Рыбалка сюда</span>
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -233,180 +332,135 @@ export const FishingSpotsView: React.FC<FishingSpotsViewProps> = ({
         </div>
       </div>
 
-      {/* Add Spot Modal */}
+      {/* ADD / EDIT SPOT MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-slate-950/80 backdrop-blur-sm">
-          <form
-            onSubmit={handleCreateSpot}
-            className="w-full max-w-lg rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-2xl space-y-4"
-          >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <h3 className="text-sm font-semibold text-slate-100">Добавить рыболовную точку</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/40 backdrop-blur-md">
+          <div className="liquid-glass-card rounded-3xl max-w-lg w-full max-h-[90vh] flex flex-col border border-white/95 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-4 sm:p-5 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-base sm:text-lg font-bold text-slate-800">
+                  {editingSpotId ? 'Редактировать точку' : 'Новая точка лова'}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Укажите название, район и координаты для навигатора
+                </p>
+              </div>
               <button
-                type="button"
                 onClick={() => setIsModalOpen(false)}
-                className="text-slate-400 hover:text-slate-200"
+                className="p-2 rounded-2xl bg-white/80 hover:bg-white text-slate-400 hover:text-slate-700 border border-slate-200 transition"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <div className="space-y-3">
-              {/* Presets and Geolocation button */}
-              <div className="p-3 bg-slate-950/70 rounded-xl border border-slate-800 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-slate-300 font-medium">Выбрать точку на карте / GPS:</span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      hapticFeedback('selection');
-                      if ('geolocation' in navigator) {
-                        navigator.geolocation.getCurrentPosition(
-                          pos => {
-                            setLat(Number(pos.coords.latitude.toFixed(4)));
-                            setLon(Number(pos.coords.longitude.toFixed(4)));
-                            hapticFeedback('success');
-                          },
-                          err => {
-                            console.warn('Geolocation error:', err);
-                          }
-                        );
-                      }
-                    }}
-                    className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-sky-300 text-[11px] font-medium border border-slate-700 transition flex items-center gap-1"
-                  >
-                    <MapPin className="w-3 h-3 text-sky-400" />
-                    <span>Моё местоположение (GPS)</span>
-                  </button>
-                </div>
-
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {[
-                    { name: 'Мудьюг / Сухое Море', lat: 64.8820, lon: 40.2910, area: 'Белое Море' },
-                    { name: 'Никольское устье', lat: 64.5500, lon: 40.4200, area: 'Северная Двина' },
-                    { name: 'Лапоминка', lat: 64.7800, lon: 40.4500, area: 'Дельта Двины' },
-                    { name: 'Маймакса 26 л/з', lat: 64.6500, lon: 40.5200, area: 'Северная Двина' },
-                    { name: 'о. Ягры', lat: 64.5950, lon: 39.8200, area: 'Белое Море' }
-                  ].map((p, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => {
-                        hapticFeedback('selection');
-                        setLat(p.lat);
-                        setLon(p.lon);
-                        setArea(p.area);
-                        if (!name) setName(p.name);
-                      }}
-                      className="px-2 py-0.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] text-slate-300 border border-slate-800 transition"
-                    >
-                      {p.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
+            <form onSubmit={handleSaveSpot} className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3.5">
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">Название точки *</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Название точки
+                </label>
                 <input
                   type="text"
                   value={name}
                   onChange={e => setName(e.target.value)}
-                  placeholder="Например: Банка наважья у маяка"
+                  placeholder="Например: Остров Мудьюг (южный мыс)"
+                  className="w-full px-3.5 py-2.5 rounded-2xl bg-white border border-slate-200 text-xs focus:ring-2 focus:ring-sky-500"
                   required
-                  className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-slate-600"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Район / Водоем
+                </label>
+                <input
+                  type="text"
+                  value={area}
+                  onChange={e => setArea(e.target.value)}
+                  placeholder="Сухое море, Маймакса, Уйма, Никольское..."
+                  className="w-full px-3.5 py-2 rounded-2xl bg-white border border-slate-200 text-xs"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs">
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">Широта (Latitude)</label>
+                  <label className="block text-slate-700 mb-1 font-semibold">Широта (Lat)</label>
                   <input
                     type="number"
                     step="0.0001"
                     value={lat}
-                    onChange={e => setLat(parseFloat(e.target.value))}
+                    onChange={e => setLat(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-mono"
                     required
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-slate-600"
                   />
                 </div>
-
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">Долгота (Longitude)</label>
+                  <label className="block text-slate-700 mb-1 font-semibold">Долгота (Lon)</label>
                   <input
                     type="number"
                     step="0.0001"
                     value={lon}
-                    onChange={e => setLon(parseFloat(e.target.value))}
+                    onChange={e => setLon(Number(e.target.value))}
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-mono"
                     required
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-slate-600"
                   />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 text-xs">
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">Район / Акватория</label>
+                  <label className="block text-slate-700 mb-1 font-semibold">Какая рыба ловится</label>
                   <input
                     type="text"
-                    value={area}
-                    onChange={e => setArea(e.target.value)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-slate-600"
+                    value={recommendedFish}
+                    onChange={e => setRecommendedFish(e.target.value)}
+                    placeholder="Корюшка, Навага, Сиг"
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs"
                   />
                 </div>
-
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">Сезон</label>
-                  <select
-                    value={season}
-                    onChange={e => setSeason(e.target.value as any)}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-slate-600"
-                  >
-                    <option value="Зима (со льда)">Зима (со льда)</option>
-                    <option value="Лето (открытая вода)">Лето (открытая вода)</option>
-                    <option value="Круглый год">Круглый год</option>
-                  </select>
+                  <label className="block text-slate-700 mb-1 font-semibold">Глубина (м)</label>
+                  <input
+                    type="text"
+                    value={depthMeters}
+                    onChange={e => setDepthMeters(e.target.value)}
+                    placeholder="3-6 м"
+                    className="w-full px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs"
+                  />
                 </div>
               </div>
 
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">Целевая рыба (через запятую)</label>
-                <input
-                  type="text"
-                  value={recommendedFishInput}
-                  onChange={e => setRecommendedFishInput(e.target.value)}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-slate-600"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] text-slate-400 mb-1">Описание / ориентиры / глубины</label>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Описание подъезда / Особенности
+                </label>
                 <textarea
                   value={description}
                   onChange={e => setDescription(e.target.value)}
                   rows={2}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 text-xs focus:outline-none focus:border-slate-600 resize-none"
+                  placeholder="Заезд через Лапоминку, буранник набит, выход на лед надежный..."
+                  className="w-full px-3 py-2 rounded-2xl bg-white border border-slate-200 text-xs focus:ring-2 focus:ring-sky-500"
                 />
               </div>
-            </div>
 
-            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-800">
-              <button
-                type="button"
-                onClick={() => setIsModalOpen(false)}
-                className="px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:text-slate-200"
-              >
-                Отмена
-              </button>
-              <button
-                type="submit"
-                disabled={submitting || !name.trim()}
-                className="px-4 py-2 rounded-xl bg-slate-200 hover:bg-white text-slate-900 text-xs font-medium transition shadow-sm"
-              >
-                {submitting ? 'Сохранение...' : 'Добавить точку'}
-              </button>
-            </div>
-          </form>
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-4 py-2 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-semibold transition"
+                >
+                  Отмена
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-5 py-2 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white text-xs font-semibold shadow-md shadow-sky-500/20 active:scale-95 transition"
+                >
+                  {submitting ? 'Сохранение...' : editingSpotId ? 'Сохранить изменения' : 'Добавить точку'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>

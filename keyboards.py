@@ -13,26 +13,22 @@ def get_main_reply_keyboard() -> ReplyKeyboardMarkup:
         keyboard=[
             [
                 KeyboardButton(
-                    text="🌊 Запустить Поморский Mini App",
-                    web_app=WebAppInfo(url=f"{WEBAPP_URL}?tab=profile")
+                    text="🎣 Открыть Mini App (Рыбалки)",
+                    web_app=WebAppInfo(url=f"{WEBAPP_URL}?tab=trips")
                 )
             ],
             [
-                KeyboardButton(text="🚗 Экипажи и Поездки"),
-                KeyboardButton(text="🗺 Карта и Точки лова")
+                KeyboardButton(text="🎣 Рыбалки и Экипажи"),
+                KeyboardButton(text="📍 Карта и Точки лова")
             ],
             [
-                KeyboardButton(text="⛽️ Калькулятор бензина"),
-                KeyboardButton(text="🐟 Журнал уловов")
-            ],
-            [
-                KeyboardButton(text="📍 Отправить геопозицию", request_location=True),
-                KeyboardButton(text="👤 Мой профиль (@EKlimov84)")
+                KeyboardButton(text="🐟 Журнал уловов"),
+                KeyboardButton(text="👤 Настройки профиля")
             ]
         ],
         resize_keyboard=True,
         is_persistent=True,
-        input_field_placeholder="Выберите действие в меню или введите километраж (/fuel 120)..."
+        input_field_placeholder="Выберите раздел меню..."
     )
 
 def get_webapp_inline_keyboard() -> InlineKeyboardMarkup:
@@ -41,17 +37,29 @@ def get_webapp_inline_keyboard() -> InlineKeyboardMarkup:
         inline_keyboard=[
             [
                 InlineKeyboardButton(
-                    text="🌊 Открыть Поморский Mini App",
-                    web_app=WebAppInfo(url=f"{WEBAPP_URL}?tab=profile")
+                    text="🎣 Открыть Mini App",
+                    web_app=WebAppInfo(url=f"{WEBAPP_URL}?tab=trips")
                 )
             ],
             [
-                InlineKeyboardButton(text="🚗 Поездки и Экипажи", callback_data="btn_trips"),
-                InlineKeyboardButton(text="🗺 Карта глубин и точек", callback_data="btn_spots")
+                InlineKeyboardButton(
+                    text="🎣 Рыбалки",
+                    web_app=WebAppInfo(url=f"{WEBAPP_URL}?tab=trips")
+                ),
+                InlineKeyboardButton(
+                    text="📍 Точки лова",
+                    web_app=WebAppInfo(url=f"{WEBAPP_URL}?tab=spots")
+                )
             ],
             [
-                InlineKeyboardButton(text="⛽️ Бензин и Авто", callback_data="btn_car"),
-                InlineKeyboardButton(text="🐟 Отчёты об уловах", callback_data="btn_history")
+                InlineKeyboardButton(
+                    text="🐟 Уловы",
+                    web_app=WebAppInfo(url=f"{WEBAPP_URL}?tab=history")
+                ),
+                InlineKeyboardButton(
+                    text="👤 Профиль",
+                    web_app=WebAppInfo(url=f"{WEBAPP_URL}?tab=profile")
+                )
             ],
             [
                 InlineKeyboardButton(

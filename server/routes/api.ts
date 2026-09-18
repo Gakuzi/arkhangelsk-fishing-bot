@@ -28,7 +28,8 @@ apiRouter.get('/telegram-avatar/:userId', async (req: Request, res: Response) =>
 
     // 1. Fetch user's profile photos via Telegram Bot API
     const photosRes = await fetch(
-      `https://api.telegram.org/bot${config.telegramToken}/getUserProfilePhotos?user_id=${rawId}&limit=1`
+      `${config.telegramApiBase}/bot${config.telegramToken}/getUserProfilePhotos?user_id=${rawId}&limit=1`,
+      { signal: AbortSignal.timeout(3000) }
     );
     const photosData = await photosRes.json();
     if (!photosData.ok || !photosData.result?.photos?.length || !photosData.result.photos[0]?.length) {
@@ -41,7 +42,8 @@ apiRouter.get('/telegram-avatar/:userId', async (req: Request, res: Response) =>
 
     // 2. Get file path from Telegram
     const fileRes = await fetch(
-      `https://api.telegram.org/bot${config.telegramToken}/getFile?file_id=${bestPhoto.file_id}`
+      `${config.telegramApiBase}/bot${config.telegramToken}/getFile?file_id=${bestPhoto.file_id}`,
+      { signal: AbortSignal.timeout(3000) }
     );
     const fileData = await fileRes.json();
     if (!fileData.ok || !fileData.result?.file_path) {
@@ -49,8 +51,8 @@ apiRouter.get('/telegram-avatar/:userId', async (req: Request, res: Response) =>
     }
 
     // 3. Download and stream image safely without exposing bot token
-    const fileUrl = `https://api.telegram.org/file/bot${config.telegramToken}/${fileData.result.file_path}`;
-    const imgRes = await fetch(fileUrl);
+    const fileUrl = `${config.telegramApiBase}/file/bot${config.telegramToken}/${fileData.result.file_path}`;
+    const imgRes = await fetch(fileUrl, { signal: AbortSignal.timeout(4000) });
     if (!imgRes.ok) {
       return res.status(imgRes.status).send('Failed to fetch image from Telegram CDN');
     }
