@@ -43,5 +43,5 @@ export const config = {
   queueDocId: process.env.QUEUE_DOC_ID || '',
   appUrl: process.env.APP_URL || 'https://fishing-bot.e-klimov.ru',
   botUsername: process.env.BOT_USERNAME || 'ArkhangelskFishingBot',
-  enablePolling: process.env.ENABLE_NODE_BOT_POLLING !== 'false'
+  enablePolling: process.env.ENABLE_NODE_BOT_POLLING === 'true'
 };

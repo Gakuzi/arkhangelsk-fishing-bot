@@ -23,15 +23,74 @@ import {
   BotStatus
 } from './types/index.ts';
 
+function createInitialProfile(): UserProfile {
+  // 1. Try local storage cache
+  try {
+    const cached = localStorage.getItem('pomor_profile_cache');
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed && parsed.id) return parsed;
+    }
+  } catch {}
+
+  // 2. Try Telegram WebApp user
+  const tgUser = getTelegramUser();
+  if (tgUser && tgUser.id) {
+    const name = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(' ').trim() || (tgUser.username ? `@${tgUser.username}` : 'Поморский Рыбак');
+    return {
+      id: `tg-${tgUser.id}`,
+      name,
+      telegramUsername: tgUser.username || '',
+      phone: '',
+      experienceLevel: 'Любитель',
+      fishingStyles: ['Зимняя со льда', 'Мормышка'],
+      boatType: 'Без техники',
+      homeDistrict: 'Архангельск',
+      bio: 'Поморский рыбак',
+      avatarUrl: tgUser.photo_url || '',
+      transportName: 'Нива 4x4 / УАЗ',
+      totalSeats: 4,
+      availableSeats: 3,
+      fuelType: 'АИ-92',
+      fuelPricePerLiter: 58.0,
+      fuelConsumptionPer100km: 11.5,
+      tankCapacityLiters: 55.0,
+      createdAt: new Date().toISOString().split('T')[0]
+    };
+  }
+
+  // 3. Fallback default
+  return {
+    id: 'EKlimov84',
+    name: 'Евгений Климов',
+    telegramUsername: 'EKlimov84',
+    phone: '',
+    experienceLevel: 'Эксперт',
+    fishingStyles: ['Зимняя со льда', 'Мормышка', 'Троллинг'],
+    boatType: 'Казанка 5М / Мотор 30 л.с.',
+    homeDistrict: 'Архангельск (Соломбала)',
+    bio: 'Поморский рыбак. Знаю фарватеры Северной Двины и Сухое море.',
+    avatarUrl: '',
+    transportName: 'УАЗ Патриот 4x4',
+    totalSeats: 4,
+    availableSeats: 2,
+    fuelType: 'АИ-92',
+    fuelPricePerLiter: 56.5,
+    fuelConsumptionPer100km: 12.5,
+    tankCapacityLiters: 68.0,
+    createdAt: new Date().toISOString().split('T')[0]
+  };
+}
+
 export function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('profile');
-  const [user, setUser] = useState<UserProfile | null>(null);
+  const [user, setUser] = useState<UserProfile>(createInitialProfile);
   const [trips, setTrips] = useState<PlannedTrip[]>([]);
   const [history, setHistory] = useState<TripHistory[]>([]);
   const [spots, setSpots] = useState<FishingSpot[]>([]);
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [botStatus, setBotStatus] = useState<BotStatus | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
 
   // Initialize Telegram WebApp (ready, expand to full screen) & read URL deep-link
   useEffect(() => {
@@ -61,7 +120,7 @@ export function App() {
             photoUrl: tgUser.photo_url
           });
         } catch (syncErr) {
-          console.error('Failed to sync Telegram profile:', syncErr);
+          console.warn('Failed to sync Telegram profile with backend:', syncErr);
         }
       }
 
@@ -75,58 +134,59 @@ export function App() {
           api.getBotStatus().catch(() => null)
         ]);
 
-      setTrips(tripsData);
-      setHistory(histData);
-      setSpots(spotsData);
-      setLogs(logsData);
+      if (tripsData?.length) setTrips(tripsData);
+      if (histData?.length) setHistory(histData);
+      if (spotsData?.length) setSpots(spotsData);
+      if (logsData?.length) setLogs(logsData);
       if (statusData) setBotStatus(statusData);
 
-      // If user profile is not set yet (or browser outside Telegram)
+      // If user profile is received from backend
       if (personalProfile) {
         setUser(personalProfile);
         try {
+          localStorage.setItem('pomor_profile_cache', JSON.stringify(personalProfile));
           localStorage.setItem('pomor_last_tg_id', personalProfile.id);
         } catch {}
-      } else if (!user) {
+      } else {
         // Browser / Local Dev fallback: find previously synced user or Evgeny Klimov
-        const existingUsers = await api.getUsers().catch(() => []);
-        let lastSavedId: string | null = null;
         try {
-          lastSavedId = localStorage.getItem('pomor_last_tg_id');
+          const existingUsers = await api.getUsers().catch(() => []);
+          let lastSavedId: string | null = null;
+          try {
+            lastSavedId = localStorage.getItem('pomor_last_tg_id');
+          } catch {}
+
+          const userBySavedId = lastSavedId ? existingUsers.find(u => u.id === lastSavedId) : null;
+          const userByUsername = existingUsers.find(
+            u => (u.telegramUsername || '').toLowerCase() === 'eklimov84'
+          );
+
+          if (userBySavedId) {
+            setUser(userBySavedId);
+            localStorage.setItem('pomor_profile_cache', JSON.stringify(userBySavedId));
+          } else if (userByUsername) {
+            setUser(userByUsername);
+            localStorage.setItem('pomor_profile_cache', JSON.stringify(userByUsername));
+          } else if (existingUsers.length > 0) {
+            setUser(existingUsers[0]);
+            localStorage.setItem('pomor_profile_cache', JSON.stringify(existingUsers[0]));
+          }
         } catch {}
-
-        const userBySavedId = lastSavedId ? existingUsers.find(u => u.id === lastSavedId) : null;
-        const userByUsername = existingUsers.find(
-          u => (u.telegramUsername || '').toLowerCase() === 'eklimov84'
-        );
-
-        if (userBySavedId) {
-          setUser(userBySavedId);
-        } else if (userByUsername) {
-          setUser(userByUsername);
-        } else if (existingUsers.length > 0) {
-          setUser(existingUsers[0]);
-        } else {
-          const fallbackUser = await api.syncTelegramUser({
-            id: 'EKlimov84',
-            firstName: 'Евгений',
-            lastName: 'Климов',
-            username: 'EKlimov84',
-            photoUrl: ''
-          });
-          setUser(fallbackUser);
-        }
       }
     } catch (err) {
       console.error('Error loading data:', err);
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, []);
 
   useEffect(() => {
     loadAllData();
-    const interval = setInterval(loadAllData, 12000);
+    // Refresh data only when tab is visible, every 45 seconds to reduce server load
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      loadAllData();
+    }, 45000);
     return () => clearInterval(interval);
   }, [loadAllData]);
 
@@ -278,17 +338,29 @@ export function App() {
           </div>
         ) : (
           <>
-            {activeTab === 'profile' && user && (
-              <UserProfileView
-                user={user}
-                onSaveProfile={handleSaveProfile}
-                history={history}
-                trips={trips}
-                spots={spots}
-                onCreateTrip={handleCreateTrip}
-                onAddSpot={handleAddSpot}
-                onAddHistory={handleAddHistory}
-              />
+            {activeTab === 'profile' && (
+              user ? (
+                <UserProfileView
+                  user={user}
+                  onSaveProfile={handleSaveProfile}
+                  history={history}
+                  trips={trips}
+                  spots={spots}
+                  onCreateTrip={handleCreateTrip}
+                  onAddSpot={handleAddSpot}
+                  onAddHistory={handleAddHistory}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center p-8 bg-slate-900/60 border border-slate-800 rounded-2xl text-center">
+                  <p className="text-slate-300 font-medium mb-2">Профиль загружается...</p>
+                  <button
+                    onClick={loadAllData}
+                    className="px-4 py-2 bg-sky-600 hover:bg-sky-500 rounded-xl text-xs font-semibold text-white transition"
+                  >
+                    Повторить подключение
+                  </button>
+                </div>
+              )
             )}
 
             {activeTab === 'trips' && (

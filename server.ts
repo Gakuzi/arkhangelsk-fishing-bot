@@ -25,8 +25,9 @@ async function startServer() {
   // Mount API router
   app.use('/api', apiRouter);
 
-  // Vite middleware for development
-  if (process.env.NODE_ENV !== 'production') {
+  // Vite middleware for development (only when running dev server directly, never for compiled bundle)
+  const isProd = process.env.NODE_ENV === 'production' || (process.argv[1] && process.argv[1].includes('dist'));
+  if (!isProd) {
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
