@@ -1,4 +1,5 @@
-import { GoogleGenAI } from '@google/genai';
+// Smart AI assistant engine for Pomor Fishing Bot
+// Uses astronomical, lunar, tidal and meteorological calculation with optional Gemini enrichment
 
 interface ForecastQuery {
   spotName: string;
@@ -204,9 +205,10 @@ export async function generateFishingForecast(query: ForecastQuery): Promise<Fis
   let suggestedTitle = `${biteRating === 'Жор' ? '⚡ Жор наваги и корюшки' : '🎣 Рыбалка'}: ${query.spotName}`;
   let summary = `По прогнозу на ${dateStr}: давление ${pressureMmHg} мм рт. ст., ветер ${windDirection} ${windSpeed} м/с, температура ${temp}°C. Луна: ${moon.phaseName}. Благоприятная фаза прилива обеспечивает высокую активность рыбы.`;
 
-  // 4. If GEMINI_API_KEY is available, enrich with Gemini 3.8 Flash
+  // 4. If GEMINI_API_KEY is available, enrich with Gemini
   if (process.env.GEMINI_API_KEY) {
     try {
+      const { GoogleGenAI } = await import('@google/genai');
       const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
       const prompt = `Ты — экспертный поморский ассистент рыбака по Архангельской области, Белому Морю и Северной Двине.
 Проанализируй реальные погодные и гидрологические условия для локации "${query.spotName}" (координаты ${query.lat}, ${query.lon}, район: ${query.area || 'Архангельская область'}) на дату ${dateStr}:

@@ -81,10 +81,13 @@ async function startServer() {
 
   // If primary port succeeded, also attempt listening on secondary port for Nginx proxy redundancy
   try {
-    const secondServer = app.listen(secondaryPort, HOST, () => {
+    const secondServer = app.listen(secondaryPort, HOST);
+    secondServer.on('error', () => {
+      // Ignored: secondary port occupied by another service on host
+    });
+    secondServer.on('listening', () => {
       console.log(`🌐 Redundancy port ${secondaryPort} active for Nginx`);
     });
-    secondServer.on('error', () => {});
   } catch {}
 }
 
