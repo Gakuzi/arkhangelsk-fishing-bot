@@ -35,7 +35,7 @@ function loadEnvFile() {
 loadEnvFile();
 
 export const config = {
-  port: Number(process.env.PORT) || 3000,
+  port: Number(process.env.PORT) || 3005,
   host: process.env.HOST || '0.0.0.0',
   telegramToken: process.env.TELEGRAM_BOT_TOKEN || '',
   telegramChatId: process.env.TELEGRAM_CHAT_ID || '',

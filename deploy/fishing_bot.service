@@ -8,7 +8,7 @@ User=root
 WorkingDirectory=/root/fishing_bot
 EnvironmentFile=-/root/fishing_bot/.env
 Environment=NODE_ENV=production
-Environment=PORT=3000
+Environment=PORT=3005
 Environment=ENABLE_NODE_BOT_POLLING=false
 ExecStart=/usr/bin/env node dist/server.cjs
 Restart=always
