@@ -62,6 +62,17 @@ async function startServer() {
     console.log(`🤖 Telegram Bot Polling: ${telegramBot.getStatus().isPolling ? 'Active' : 'Standby'}`);
     console.log(`=======================================================`);
   });
+
+  // If in production on VPS, also listen on alternate port (3005 or 3000) so Nginx works with either configuration
+  const alternatePort = PORT === 3000 ? 3005 : 3000;
+  try {
+    const secondaryServer = app.listen(alternatePort, HOST, () => {
+      console.log(`🌐 Secondary port ${alternatePort} active (Nginx reverse-proxy redundancy)`);
+    });
+    secondaryServer.on('error', () => {
+      // Gracefully ignore if alternate port is unavailable or not allowed
+    });
+  } catch {}
 }
 
 startServer().catch(err => {

@@ -8,13 +8,14 @@ User=root
 WorkingDirectory=/root/fishing_bot
 EnvironmentFile=-/root/fishing_bot/.env
 Environment=NODE_ENV=production
-Environment=PORT=3005
+Environment=PORT=3000
 Environment=ENABLE_NODE_BOT_POLLING=false
-ExecStart=/usr/bin/node dist/server.cjs
-Restart=on-failure
-RestartSec=5
+ExecStart=/usr/bin/env node dist/server.cjs
+Restart=always
+RestartSec=3
 LimitNOFILE=65535
 
 [Install]
 WantedBy=multi-user.target
+
 
