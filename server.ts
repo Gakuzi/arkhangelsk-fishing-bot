@@ -55,23 +55,36 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, HOST, () => {
+  const primaryPort = process.env.DISABLE_HMR === 'true' ? 3000 : (Number(process.env.PORT) || 3005);
+  const secondaryPort = primaryPort === 3005 ? 3000 : 3005;
+
+  const server = app.listen(primaryPort, HOST, () => {
     console.log(`=======================================================`);
-    console.log(`⚓ Arkhangelsk Fishing Bot Server started`);
-    console.log(`🌐 Local & WebApp URL: http://${HOST}:${PORT}`);
+    console.log(`⚓ Arkhangelsk Fishing Bot Server started on port ${primaryPort}`);
+    console.log(`🌐 Local & WebApp URL: http://${HOST}:${primaryPort}`);
     console.log(`🤖 Telegram Bot Polling: ${telegramBot.getStatus().isPolling ? 'Active' : 'Standby'}`);
     console.log(`=======================================================`);
   });
 
-  // If in production on VPS, also listen on alternate port (3005 or 3000) so Nginx works with either configuration
-  const alternatePort = PORT === 3000 ? 3005 : 3000;
+  server.on('error', (err: any) => {
+    console.warn(`Warning on primary port ${primaryPort}: ${err.message}`);
+    if (err.code === 'EADDRINUSE') {
+      console.log(`Port ${primaryPort} occupied, starting on secondary port ${secondaryPort}...`);
+      const backupServer = app.listen(secondaryPort, HOST, () => {
+        console.log(`⚓ Arkhangelsk Fishing Bot Server active on fallback port ${secondaryPort}`);
+      });
+      backupServer.on('error', (bErr: any) => {
+        console.error(`Fatal: secondary port ${secondaryPort} also failed:`, bErr.message);
+      });
+    }
+  });
+
+  // If primary port succeeded, also attempt listening on secondary port for Nginx proxy redundancy
   try {
-    const secondaryServer = app.listen(alternatePort, HOST, () => {
-      console.log(`🌐 Secondary port ${alternatePort} active (Nginx reverse-proxy redundancy)`);
+    const secondServer = app.listen(secondaryPort, HOST, () => {
+      console.log(`🌐 Redundancy port ${secondaryPort} active for Nginx`);
     });
-    secondaryServer.on('error', () => {
-      // Gracefully ignore if alternate port is unavailable or not allowed
-    });
+    secondServer.on('error', () => {});
   } catch {}
 }
 
