@@ -2,8 +2,34 @@ import { Router, Request, Response } from 'express';
 import { sqliteStorage } from '../sqliteStorage.ts';
 import { telegramBot } from '../telegramBot.ts';
 import { config } from '../config.ts';
+import { generateFishingForecast } from '../services/fishingAssistant.ts';
 
 export const apiRouter = Router();
+
+// AI Fishing Assistant Forecast & Calculation
+apiRouter.post('/assistant/forecast', async (req: Request, res: Response) => {
+  try {
+    const { spotName, lat, lon, area, date, userGear, userTransport } = req.body;
+    if (!lat || !lon) {
+      return res.status(400).json({ error: 'Latitude and Longitude are required' });
+    }
+
+    const forecast = await generateFishingForecast({
+      spotName: spotName || 'Выбранная точка на карте',
+      lat: Number(lat),
+      lon: Number(lon),
+      area: area || 'Архангельская область',
+      date: date || new Date().toISOString().split('T')[0],
+      userGear,
+      userTransport
+    });
+
+    res.json(forecast);
+  } catch (err: any) {
+    console.error('Error generating fishing forecast:', err);
+    res.status(500).json({ error: err.message || 'Failed to generate forecast' });
+  }
+});
 
 // Config
 apiRouter.get('/config', (req: Request, res: Response) => {

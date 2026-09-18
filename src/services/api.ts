@@ -244,5 +244,24 @@ export const api = {
       body: JSON.stringify({ text, chatId })
     });
     return res.json();
+  },
+
+  // AI Fishing Assistant Forecast
+  async getAssistantForecast(payload: {
+    spotName: string;
+    lat: number;
+    lon: number;
+    area?: string;
+    date?: string;
+    userGear?: string[];
+    userTransport?: string;
+  }) {
+    const res = await fetch('/api/assistant/forecast', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
   }
 };
