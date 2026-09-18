@@ -22,10 +22,11 @@ import {
   Star,
   ChevronRight,
   HelpCircle,
-  X
+  X,
+  Share2
 } from 'lucide-react';
 import { UserProfile, UserTransport } from '../../types/index.ts';
-import { isInsideTelegram, hapticFeedback } from '../../services/telegramWebApp.ts';
+import { isInsideTelegram, hapticFeedback, shareCarCardToTelegram } from '../../services/telegramWebApp.ts';
 
 interface UserProfileViewProps {
   user: UserProfile;
@@ -383,19 +384,30 @@ export const UserProfileView: React.FC<UserProfileViewProps> = ({
           </div>
         </div>
 
-        {onRefresh && (
+        <div className="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
-            onClick={() => {
-              hapticFeedback('light');
-              onRefresh();
-            }}
-            title="Обновить профиль из Telegram"
-            className="p-3 rounded-2xl bg-white hover:bg-slate-50 text-slate-600 hover:text-sky-600 border border-slate-200 shadow-sm transition"
+            onClick={shareCarCardToTelegram}
+            title="Отправить карточку автомобиля и экипажа в любой чат"
+            className="flex items-center gap-1.5 px-3 py-2.5 rounded-2xl bg-sky-50 hover:bg-sky-100 text-sky-700 hover:text-sky-800 border border-sky-200 text-xs font-semibold shadow-sm transition"
           >
-            <RotateCw className="w-4 h-4" />
+            <Share2 className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Карточка авто</span>
           </button>
-        )}
+          {onRefresh && (
+            <button
+              type="button"
+              onClick={() => {
+                hapticFeedback('light');
+                onRefresh();
+              }}
+              title="Обновить профиль из Telegram"
+              className="p-3 rounded-2xl bg-white hover:bg-slate-50 text-slate-600 hover:text-sky-600 border border-slate-200 shadow-sm transition"
+            >
+              <RotateCw className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Navigation Filter Tabs */}

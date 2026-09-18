@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
+import os
+import sys
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher
 from aiogram.types import MenuButtonWebApp, WebAppInfo, BotCommand
-from config import TELEGRAM_BOT_TOKEN, WEBAPP_URL
+from config import TELEGRAM_BOT_TOKEN, WEBAPP_URL, BOT_USERNAME
 import handlers_group
 import handlers_private
 import handlers_inline

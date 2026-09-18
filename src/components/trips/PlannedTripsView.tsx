@@ -25,7 +25,13 @@ import {
   Gauge
 } from 'lucide-react';
 import { PlannedTrip, UserProfile, FishingSpot } from '../../types/index.ts';
-import { openTelegramLink, hapticFeedback, isInsideTelegram } from '../../services/telegramWebApp.ts';
+import {
+  openTelegramLink,
+  hapticFeedback,
+  isInsideTelegram,
+  shareTripToTelegram,
+  switchInlineQuery
+} from '../../services/telegramWebApp.ts';
 import {
   POPULAR_MEET_POINTS,
   calculateRoundTripDistanceKm,
@@ -404,13 +410,24 @@ export const PlannedTripsView: React.FC<PlannedTripsViewProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={handleOpenCreateModal}
-          className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-semibold text-sm shadow-md shadow-sky-500/25 active:scale-95 transition"
-        >
-          <Sparkles className="w-4 h-4" />
-          <span>Спланировать с ассистентом</span>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => switchInlineQuery('trips', ['users', 'groups'])}
+            title="Отправить карточки выездов в любой чат"
+            className="flex items-center justify-center gap-1.5 px-3.5 py-3 rounded-2xl bg-white hover:bg-slate-50 text-slate-700 font-semibold text-sm border border-slate-200 shadow-sm active:scale-95 transition"
+          >
+            <Share2 className="w-4 h-4 text-sky-600" />
+            <span className="hidden sm:inline">Отправить в чат</span>
+          </button>
+          <button
+            onClick={handleOpenCreateModal}
+            className="flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white font-semibold text-sm shadow-md shadow-sky-500/25 active:scale-95 transition"
+          >
+            <Sparkles className="w-4 h-4" />
+            <span>Спланировать с ассистентом</span>
+          </button>
+        </div>
       </div>
 
       {/* Filter Tabs */}
@@ -573,6 +590,24 @@ export const PlannedTripsView: React.FC<PlannedTripsViewProps> = ({
                   </div>
 
                   <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        shareTripToTelegram({
+                          id: trip.id,
+                          title: trip.title,
+                          destination: trip.destination,
+                          date: trip.date,
+                          meetTime: trip.meetTime
+                        });
+                      }}
+                      title="Отправить карточку этого выезда в Telegram чат"
+                      className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-sky-50 text-slate-700 hover:text-sky-600 font-medium text-xs border border-slate-200 transition"
+                    >
+                      <Share2 className="w-3.5 h-3.5 text-sky-600" />
+                      <span>В чат</span>
+                    </button>
                     {isJoined ? (
                       <button
                         onClick={() => {

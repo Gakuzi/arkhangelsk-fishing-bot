@@ -11,10 +11,11 @@ import {
   CalendarDays,
   Layers,
   X,
-  Fish
+  Fish,
+  Share2
 } from 'lucide-react';
 import { FishingSpot, UserProfile } from '../../types/index.ts';
-import { hapticFeedback } from '../../services/telegramWebApp.ts';
+import { hapticFeedback, shareSpotToTelegram } from '../../services/telegramWebApp.ts';
 import { AddSpotModal } from './AddSpotModal.tsx';
 
 interface FishingSpotsViewProps {
@@ -256,18 +257,39 @@ export const FishingSpotsView: React.FC<FishingSpotsViewProps> = ({
                     {spot.lat.toFixed(4)}, {spot.lon.toFixed(4)}
                   </span>
 
-                  {onCreateTripWithSpot && (
+                  <div className="flex items-center gap-1.5">
                     <button
+                      type="button"
                       onClick={e => {
                         e.stopPropagation();
-                        onCreateTripWithSpot(spot);
+                        shareSpotToTelegram({
+                          id: spot.id,
+                          name: spot.name,
+                          area: spot.area,
+                          lat: spot.lat,
+                          lon: spot.lon
+                        });
                       }}
-                      className="px-2.5 py-1 rounded-xl bg-sky-100 hover:bg-sky-200 text-sky-800 font-semibold text-[11px] flex items-center gap-1 transition"
+                      title="Отправить точку в Telegram чат"
+                      className="px-2 py-1 rounded-xl bg-slate-100 hover:bg-sky-50 text-slate-700 hover:text-sky-600 font-medium text-[11px] flex items-center gap-1 border border-slate-200 transition"
                     >
-                      <CalendarDays className="w-3 h-3" />
-                      <span>Рыбалка сюда</span>
+                      <Share2 className="w-3 h-3 text-sky-600" />
+                      <span>В чат</span>
                     </button>
-                  )}
+
+                    {onCreateTripWithSpot && (
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          onCreateTripWithSpot(spot);
+                        }}
+                        className="px-2.5 py-1 rounded-xl bg-sky-100 hover:bg-sky-200 text-sky-800 font-semibold text-[11px] flex items-center gap-1 transition"
+                      >
+                        <CalendarDays className="w-3 h-3" />
+                        <span>Рыбалка сюда</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             );

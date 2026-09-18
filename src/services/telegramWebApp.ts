@@ -314,3 +314,100 @@ export async function requestTelegramLocation(): Promise<LocationResult | null> 
   return null;
 }
 
+/**
+ * Switch inline query to share cards into any chat, group, or channel
+ */
+export function switchInlineQuery(
+  query: string = '',
+  chooseChatTypes?: ('users' | 'bots' | 'groups' | 'channels')[]
+) {
+  const tg = getTelegramWebApp();
+  if (tg?.switchInlineQuery) {
+    try {
+      if (chooseChatTypes && chooseChatTypes.length > 0) {
+        tg.switchInlineQuery(query, chooseChatTypes);
+      } else {
+        tg.switchInlineQuery(query);
+      }
+      return;
+    } catch (e) {
+      console.warn('switchInlineQuery failed:', e);
+    }
+  }
+
+  // Fallback: use t.me share link
+  const botUsername = 'ArkhangelskFishingBot';
+  const text = query ? `Рыбалка в Поморье: ${query}` : 'Рыболовный бот Архангельска';
+  const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(`https://t.me/${botUsername}`)}&text=${encodeURIComponent(text)}`;
+  window.open(shareUrl, '_blank');
+}
+
+/**
+ * Share a planned fishing trip card directly to Telegram
+ */
+export function shareTripToTelegram(trip: {
+  id: string;
+  title: string;
+  destination: string;
+  date: string;
+  meetTime?: string;
+}) {
+  hapticFeedback('selection');
+  const tg = getTelegramWebApp();
+  if (tg?.switchInlineQuery) {
+    try {
+      tg.switchInlineQuery(trip.title, ['users', 'groups', 'channels']);
+      return;
+    } catch (e) {
+      console.warn(e);
+    }
+  }
+  const text = `🎣 Рыболовный выезд: ${trip.title} (${trip.destination})\n📅 ${trip.date} в ${trip.meetTime || 'утро'}\nЗаписывайтесь в экипаж:`;
+  const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(window.location.origin + '?tab=trips&tripId=' + trip.id)}&text=${encodeURIComponent(text)}`;
+  window.open(shareUrl, '_blank');
+}
+
+/**
+ * Share a fishing spot card with GPS coordinates to Telegram
+ */
+export function shareSpotToTelegram(spot: {
+  id: string;
+  name: string;
+  area: string;
+  lat: number;
+  lon: number;
+}) {
+  hapticFeedback('selection');
+  const tg = getTelegramWebApp();
+  if (tg?.switchInlineQuery) {
+    try {
+      tg.switchInlineQuery(spot.name, ['users', 'groups', 'channels']);
+      return;
+    } catch (e) {
+      console.warn(e);
+    }
+  }
+  const text = `📍 Рыболовная точка: ${spot.name} (${spot.area})\n🧭 GPS: ${spot.lat.toFixed(5)}, ${spot.lon.toFixed(5)}`;
+  const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(`https://yandex.ru/maps/?rtext=~${spot.lat}%2C${spot.lon}&rtt=auto`)}&text=${encodeURIComponent(text)}`;
+  window.open(shareUrl, '_blank');
+}
+
+/**
+ * Share user car / crew card to Telegram
+ */
+export function shareCarCardToTelegram() {
+  hapticFeedback('selection');
+  const tg = getTelegramWebApp();
+  if (tg?.switchInlineQuery) {
+    try {
+      tg.switchInlineQuery('car', ['users', 'groups', 'channels']);
+      return;
+    } catch (e) {
+      console.warn(e);
+    }
+  }
+  const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(window.location.origin + '?tab=profile')}&text=${encodeURIComponent('🚗 Мой экипаж и авто для совместных поездок на рыбалку')}`;
+  window.open(shareUrl, '_blank');
+}
+
+
